@@ -1,5 +1,3 @@
-# Uni Spec
-
 <img src="paddy.png" width="250" alt="Paddy the Platypus">
 
 ---
@@ -12,7 +10,7 @@ Write specs. Build code. Ship software. Structured clarity for humans and clanke
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.3-blue?style=for-the-badge)](https://crates.io/crates/unispec)
+[![Version](https://img.shields.io/badge/version-0.0.4-blue?style=for-the-badge)](https://crates.io/crates/unispec)
 [![Status](https://img.shields.io/badge/status-ready-orange?style=for-the-badge)](https://github.com/uwzis/unispec)
 [![Arch Package](https://img.shields.io/badge/Arch-AUR-blue?style=for-the-badge&logo=arch-linux)](https://aur.archlinux.org/packages/unispec)
 [![Built with Love](https://img.shields.io/badge/Built%20with-%E2%9D%A4%EF%B8%8F-red?style=for-the-badge)](https://github.com/uwzis/unispec)
