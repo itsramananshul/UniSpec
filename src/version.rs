@@ -1,0 +1,2 @@
+// src/version.rs
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

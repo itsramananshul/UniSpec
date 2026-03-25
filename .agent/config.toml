@@ -1,0 +1,18 @@
+# UniSpec Agent Configuration
+
+# Current active mode
+current_mode = "simple"
+
+# Default area for topic operations
+# default_area = "Working"
+
+# Protected areas that cannot be deleted
+# protected_areas = ["Staging", "Working", "Build"]
+
+# Connectors - Custom commands that become MCP tools
+# Example:
+# [[connector]]
+# name = "test"
+# description = "Run the test suite"
+# command = "pytest"
+# args = ["tests/", "-v"]

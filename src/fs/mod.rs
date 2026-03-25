@@ -1,0 +1,119 @@
+// src/fs/mod.rs
+use anyhow::Result;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+pub fn project_root() -> Result<PathBuf> {
+    Ok(std::env::current_dir()?)
+}
+
+pub fn spec_dir() -> PathBuf {
+    project_root().unwrap_or_default().join("spec")
+}
+
+pub fn topic_path(topic: &str, area: &str) -> PathBuf {
+    spec_dir().join(area).join(topic.replace('/', "/"))
+}
+
+pub fn config_path() -> PathBuf {
+    agent_dir().join("config.toml")
+}
+
+pub fn agent_dir() -> PathBuf {
+    project_root().unwrap_or_default().join(".agent")
+}
+
+pub fn global_modes_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("unispec")
+        .join("modes")
+}
+
+pub fn global_config_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("unispec")
+}
+
+pub fn current_mode_templates_dir() -> Option<PathBuf> {
+    let mode_name = crate::agent::current_mode().ok()?;
+    let agent_dir = agent_dir();
+
+    // Check local mode first
+    let local_templates = agent_dir.join("modes").join(&mode_name).join("templates");
+    if local_templates.exists() {
+        return Some(local_templates);
+    }
+
+    // Check global mode
+    let global_templates = global_modes_dir().join(&mode_name).join("templates");
+    if global_templates.exists() {
+        return Some(global_templates);
+    }
+
+    None
+}
+
+pub fn read_template(name: &str) -> Option<String> {
+    if let Some(templates_dir) = current_mode_templates_dir() {
+        let path = templates_dir.join(name);
+        if path.exists() {
+            return fs::read_to_string(&path).ok();
+        }
+    }
+
+    // Fallback to global templates dir
+    let global_path = global_config_dir().join("templates").join(name);
+    if global_path.exists() {
+        return fs::read_to_string(&global_path).ok();
+    }
+
+    None
+}
+
+pub fn ensure_dir(path: &Path) -> Result<()> {
+    if !path.exists() {
+        fs::create_dir_all(path)?;
+    }
+    Ok(())
+}
+
+// Re-export modules
+pub mod config;
+pub mod index;
+
+// Re-export Area from cli::model
+pub use crate::cli::model::Area;
+
+// Helper functions for dynamic areas
+pub fn list_areas() -> Result<Vec<String>> {
+    let dir = spec_dir();
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut areas = vec![];
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() && path.join("area.md").exists() {
+            areas.push(entry.file_name().to_string_lossy().to_string());
+        }
+    }
+    areas.sort();
+    Ok(areas)
+}
+
+pub fn area_exists(area: &str) -> bool {
+    spec_dir().join(area).join("area.md").exists()
+}
+
+pub fn rename_area(old: &str, new: &str) -> Result<()> {
+    let old_path = spec_dir().join(old);
+    let new_path = spec_dir().join(new);
+    if old_path.exists() && !new_path.exists() {
+        fs::rename(&old_path, &new_path)?;
+    }
+    Ok(())
+}
