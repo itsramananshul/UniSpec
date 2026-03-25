@@ -22,7 +22,7 @@ Write specs. Build code. Ship software. Structured clarity for humans and clanke
 
 ---
 
-## The Problem 🔥
+## The Problem
 
 You write code. Then you write more code. Then someone asks "wait, what are we building again?" and nobody remembers. Your AI models constantly hallucinate and go on a bender while your team has no idea how things work. But it just works... for now.
 
@@ -30,7 +30,7 @@ For us, we're creating a frontier infrastructure project and found that spec-dri
 
 ---
 
-## The Fix 🔥
+## The Fix
 
 UniSpec is a fully open source spec-driven development orchestrator that allows you to build your own spec-driven workflows that can work inside production environments. This allows you to create specs in a tree-like format so your code is fully referenced and documented.
 
@@ -42,7 +42,7 @@ This splits up the development process into 3 concepts:
 
 ---
 
-## Quick Start 🔥
+## Quick Start
 
 ```bash
 # Install from source
@@ -92,7 +92,7 @@ Custom workflows for different teams:
 
 ---
 
-## Commands at a Glance 🔥
+## Commands at a Glance
 
 ```bash
 unispec init                          # Set up project
@@ -105,7 +105,7 @@ unispec topic progress                 # See status
 
 ---
 
-## Editor Integrations 🔥
+## Editor Integrations
 
 UniSpec plays nice with 24 AI editors. When you run `unispec init`, it can set up your editor:
 
@@ -136,7 +136,7 @@ Or use `--all` to set up all of them.
 
 ---
 
-## What Goes In A Spec? 🔥
+## What Goes In A Spec?
 
 1. What problem are we solving?
 2. Who is this for?
@@ -156,7 +156,7 @@ He believes in you. 🦫
 
 ---
 
-## What's Next? 🔥
+## What's Next?
 
 - [Getting Started](docs/getting-started.md) - Full walkthrough
 - [Commands Reference](docs/commands.md) - All CLI commands
