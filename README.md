@@ -61,7 +61,7 @@ unispec init
 unispec
 ```
 
-<img src="pladdy.jpg" width="250" alt="Paddy the Platypus">
+<img src="pladdy.jpg" width="450" alt="Paddy the Platypus">
 
 ---
 
