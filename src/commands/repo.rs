@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const DEFAULT_REPO_URL: &str = "https://github.com/uwzis/unispec-repo";
+const DEFAULT_REPO_URL: &str = "https://github.com/uwzis/unispec-modes";
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Package {

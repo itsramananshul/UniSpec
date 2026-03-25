@@ -122,6 +122,60 @@ Now your AI can run:
 - "Execute build"
 - "Run lint and fix errors"
 
+### Connector Structure
+
+Connectors are defined in `.agent/config.toml`:
+
+```toml
+[[connector]]
+name = "test"
+description = "Run test suite"
+command = "pytest"
+args = ["tests/", "-v"]
+timeout = 60
+```
+
+### Running Connectors
+
+```bash
+# Run a connector
+unispec connector run test
+
+# Run with arguments
+unispec connector run test -- -k "test_user"
+
+# List all connectors
+unispec connector list
+
+# Generate MCP config for connectors
+unispec connector mcp
+```
+
+### Using Connectors in IDE
+
+When you run `unispec init --cursor --cline --windsurf`, connectors are included in the workflow files. Your AI can then run them directly from chat:
+
+- "Run the test connector" → Executes `pytest tests/ -v`
+- "Run lint and fix errors" → Executes `ruff check .` then applies fixes
+- "Build the project" → Executes `cargo build`
+
+### Per-Project Connectors
+
+Create connectors specific to your project:
+
+```bash
+# Custom build script
+unispec connector new deploy-prod "Deploy to production" "./scripts/deploy.sh" "prod"
+
+# Database migrations
+unispec connector new migrate "Run migrations" "alembic" "upgrade" "head"
+
+# Type checking
+unispec connector new typecheck "Type check project" "mypy" "src/"
+```
+
+These are stored in `./.agent/config.toml` and available to your AI editor.
+
 ## MCP Server
 
 Start the UniSpec MCP server for direct integration:
@@ -164,9 +218,11 @@ When connected, these tools are available:
 
 ## Workflow Files
 
-When you init with an editor, UniSpec creates workflow files:
+When you init with an editor, UniSpec creates workflow files in your project:
 
 ### Cursor/Windsurf
+
+Files created in `./.cursor/commands/unispec/`:
 
 ```markdown
 # unispec:spec.md
@@ -183,6 +239,8 @@ Use this workflow when starting a new feature.
 
 ### Claude Code
 
+Files created in `./.claude/commands/unispec/`:
+
 ```markdown
 # unispec-commands
 
@@ -194,6 +252,69 @@ Use this workflow when starting a new feature.
   }
 }
 [/TOOL_CALL]
+```
+
+### Cline
+
+Files created in `./.clinerules/workflows/unispec/`:
+
+```markdown
+# unispec-spec
+
+Run when user wants to create or review a spec.
+
+1. Check existing specs in ./spec/
+2. Create new topic if needed
+3. Use specs to guide implementation
+```
+
+### Manual IDE MCP Setup
+
+If you want to connect UniSpec MCP directly to your editor:
+
+#### Cursor
+1. Go to Settings → MCP
+2. Add new MCP server:
+   - Command: `unispec`
+   - Args: `mcp`
+   - Cwd: `./`
+
+#### Windsurf
+1. Go to Settings → Extensions → MCP
+2. Add server with same config as Cursor
+
+#### Claude Desktop
+Add to `~/.config/claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "unispec": {
+      "command": "unispec",
+      "args": ["mcp"],
+      "env": {
+        "UNISPEC_ROOT": "./"
+      }
+    }
+  }
+}
+```
+
+#### VS Code
+Use the MCP extension:
+1. Install "MCP" extension
+2. Add to settings.json:
+
+```json
+{
+  "mcpServers": {
+    "unispec": {
+      "command": "unispec",
+      "args": ["mcp"],
+      "cwd": "./"
+    }
+  }
+}
 ```
 
 ## Custom MCP Integration
