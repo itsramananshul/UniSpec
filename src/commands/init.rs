@@ -73,11 +73,34 @@ pub fn run_init(root: Option<&std::path::Path>) -> Result<()> {
     // Copy workflows to main .agent/workflows for active use
     let workflows_dir = agent_root.join("workflows");
     ensure_dir(&workflows_dir)?;
-    for workflow_file in ["unispec:spec.md", "unispec:build.md", "unispec:verify.md"] {
+    for workflow_file in ["osdd:spec.md", "osdd:build.md", "osdd:verify.md"] {
         let src = simple_mode.join("workflows").join(workflow_file);
         let dst = workflows_dir.join(workflow_file);
         if src.exists() && !dst.exists() {
             fs::copy(&src, &dst)?;
+        }
+    }
+
+    // Create default area.md files if they don't exist
+    let default_area_content = r#"# Area: {area}
+
+This is a {area} area for organizing topics.
+
+## Purpose
+
+Add purpose description here.
+
+## Topics
+
+List topics in this area:
+"#;
+    for area in &default_areas {
+        let area_spec_dir = spec_root.join(area);
+        ensure_dir(&area_spec_dir)?;
+        let area_path = area_spec_dir.join("area.md");
+        if !area_path.exists() {
+            let content = default_area_content.replace("{area}", area);
+            fs::write(&area_path, content)?;
         }
     }
 

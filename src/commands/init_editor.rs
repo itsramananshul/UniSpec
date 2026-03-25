@@ -219,12 +219,31 @@ pub fn get_all_editor_names() -> Vec<&'static str> {
 }
 
 pub fn run_init_editors(project_root: &Path, editor_names: &[&str]) -> Result<Vec<EditorResult>> {
-    let mut results = Vec::new();
     let workflows_dir = project_root.join(".agent/workflows");
 
     if !workflows_dir.exists() {
-        return Ok(results);
+        let system_workflows = crate::fs::system_install_dir()
+            .join(".agent")
+            .join("modes")
+            .join("simple")
+            .join("workflows");
+        if !system_workflows.exists() {
+            return Ok(Vec::new());
+        }
+        crate::commands::init::run_init(Some(project_root))?;
+        let new_workflows_dir = project_root.join(".agent/workflows");
+        return init_editors_from_dir(project_root, editor_names, &new_workflows_dir);
     }
+
+    init_editors_from_dir(project_root, editor_names, &workflows_dir)
+}
+
+fn init_editors_from_dir(
+    project_root: &Path,
+    editor_names: &[&str],
+    workflows_dir: &Path,
+) -> Result<Vec<EditorResult>> {
+    let mut results = Vec::new();
 
     for editor_name in editor_names {
         if let Some(editor) = find_editor(editor_name) {

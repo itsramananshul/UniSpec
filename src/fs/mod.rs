@@ -49,7 +49,7 @@ fn get_global_base_dir() -> PathBuf {
 }
 
 pub fn global_modes_dir() -> PathBuf {
-    get_global_base_dir().join("modes")
+    get_global_base_dir().join(".agent").join("modes")
 }
 
 pub fn global_config_dir() -> PathBuf {
