@@ -1,6 +1,14 @@
-# UniSpec
+# Uni Spec
 
 <img src="paddy.png" width="250" alt="Paddy the Platypus">
+
+---
+
+## Spec-Driven Development That Doesn't Suck 🔥
+
+Write specs. Build code. Ship software. Structured clarity for humans and clankers alike! No more cognitive debt. All in our favorite RustLang 🦀
+
+---
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
@@ -13,12 +21,6 @@
 [![Forks](https://img.shields.io/github/forks/uwzis/unispec?style=for-the-badge&color=purple)](https://github.com/uwzis/unispec/network)
 
 
-
----
-
-## Spec-Driven Development That Doesn't Suck 🔥
-
-Write specs. Build code. Ship software. Structured clarity for humans and clankers alike! No more cognitive debt. All in our favorite RustLang 🦀
 
 ---
 
