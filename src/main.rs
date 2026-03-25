@@ -13,10 +13,11 @@ use clap::Parser;
 
 use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
-    AreaCommands, ConnectorCommands, IndexCommands, ModeCommands, PattyCommands, TopicCommands,
+    AreaCommands, ConnectorCommands, IndexCommands, ModeCommands, PattyCommands, RepoCommands,
+    TopicCommands,
 };
 use crate::cli::{Cli, Commands};
-use crate::commands::{area, index, init, init_editor, set, topic};
+use crate::commands::{area, index, init, init_editor, repo, set, topic};
 
 fn get_show_platypus() -> bool {
     crate::fs::config::get_paddy_enabled().unwrap_or(true)
@@ -389,6 +390,31 @@ fn main() -> Result<()> {
             ConnectorCommands::Mcp => {
                 let config = agent_connector::generate_mcp_config()?;
                 println!("{}", config);
+            }
+        },
+        Some(Commands::Repo(repo_cmd)) => match repo_cmd {
+            RepoCommands::List { repo } => {
+                repo::list_packages(repo.as_deref())?;
+            }
+            RepoCommands::Search { query, repo } => {
+                repo::search_packages(&query, repo.as_deref())?;
+            }
+            RepoCommands::Install {
+                package,
+                global,
+                repo,
+            } => {
+                if package.starts_with("http") || package.contains("github.com") {
+                    repo::install_from_url(&package, global)?;
+                } else {
+                    repo::install_package(&package, global, repo.as_deref())?;
+                }
+            }
+            RepoCommands::Remove { package, global } => {
+                repo::remove_package(&package, global)?;
+            }
+            RepoCommands::Installed { global } => {
+                repo::list_installed(global)?;
             }
         },
         Some(Commands::Patty(paddy_cmd)) => match paddy_cmd {

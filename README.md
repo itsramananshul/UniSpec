@@ -1,642 +1,156 @@
-# OpenSDD - Open Spec-Driven Development
+# UniSpec - Spec-Driven Development That Doesn't Suck
 
-![Paddy the Platypus](https://img.shields.io/badge/Platypus-Patty-FF6B6B?style=for-the-badge)
+Write specs. Build code. Ship software. Structured clarity for humans and clankers alike! No more cognitive debt. All in our favorite RustLang 🦀
 
-**UniSpec** is a spec-driven development methodology with a TUI interface that helps teams write specs before they write code, track progress across areas, and build software with confidence. Plus, there's a platypus.
+## The Problem
 
-## The Vision
+You write code. Then you write more code. Then someone asks "wait, what are we building again?" and nobody remembers. Your AI models constantly hallucinate and go on a bender while your team has no idea how things work. But it just works... for now.
 
-We believe **great software starts with great specs**. Before you write a single line of code, you should know:
+For us, we're creating a frontier infrastructure project and found that spec-driven development gave us some efficiency at waterfalling, but became a nightmare when debugging large and complex codebases. Using OpenSpec, BMAD, and SpecKit was starting to destroy our work.
 
-1. What problem you're solving
-2. Who it's for
-3. How you'll know when it's done
-4. What "done" actually looks like
+## The Fix
 
-OpenSDD isn't about bureaucracy or waterfall planning. It's about **clarity before code**. Think of it as a conversation with your future self and your team: "Here's what we're building, here's why, and here's how we'll know we succeeded."
+UniSpec is a fully open source spec-driven development orchestrator that allows you to build your own spec-driven workflows that can work inside production environments. This allows you to create specs in a tree-like format so your code is fully referenced and documented.
 
-The platypus? He's just here to make the paperwork less painful. His name is **Patty**. Patty believes in you.
+This splits up the development process into 3 concepts:
 
-## Why Spec-Driven Development?
+- **Modes** – Custom built workflows for your IDE agents
+- **Areas** – Specification workspaces designed for your objectives
+- **Topics** – Defined subjects that can nest into trees of specifications
 
-```mermaid
-graph TD
-    A[Idea] --> B[Write Spec]
-    B --> C[Review & Refine]
-    C --> D[Build]
-    D --> E[Verify Against Spec]
-    E --> F{Done?}
-    F -->|No| D
-    F -->|Yes| G[Ship It!]
-```
 
-Most projects fail not because of bad code, but because of **bad communication**. Specs are the contract between:
-- You and your team
-- You and your future self
-- You and the agent helping you code
 
 ## Quick Start
 
 ```bash
-# Install (when published)
-cargo install osdd
+# Install from source
+git clone https://github.com/uwzis/unispec.git
+cd unispec
+cargo install unispec
 
-# Initialize a project
-osdd init
+# Or from Arch Linux AUR
+yay -S unispec
 
-# Launch the TUI
-osdd
+# Initialize
+mkdir project && cd project
+unispec init
 
-# Or use CLI commands
-osdd area list
-osdd topic add "User Authentication" -a Staging
+# Launch TUI
+unispec
 ```
 
-## The TUI
+## Core Concepts
 
-Run `osdd` without arguments to launch the terminal user interface:
-
-```
-┌─────────────────────────────────────────────┐
-│ Open SDD v0.5.0  | Area: Working | Topics: 12│
-├─────────────────────────────────────────────┤
-│                                             │
-│     ⠀⠀⠀⠀⠀⣴⠶⠶⣒⣛⣛⣛⣛⠛⠒⠒...     │
-│     ⠀⠀🦫                                │
-│                                             │
-├─────────────────────────────────────────────┤
-│ ▶ user-authentication    ✅ ████████████  │
-│   api-redesign           ⏳ █████░░░░░░░  │
-│   payment-flow           🚧 ████░░░░░░░░  │
-├─────────────────────────────────────────────┤
-│ 🡙 Move | 🡘 Navigate | ↵ Open | n: New | q │
-└─────────────────────────────────────────────┘
-```
-
-### Navigation
-
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Move between topics |
-| `→` / `←` | Navigate into/out of topics |
-| `Enter` | Open topic or file |
-| `n` | Create new topic |
-| `r` | Remove topic |
-| `p` | Push topic to another area |
-| `f` | Find files linked to topic |
-| `\` | Toggle Patty (secret!) |
-| `q` | Quit |
-
-## Areas
-
-OpenSDD organizes work into **Areas** - stages in your development workflow:
+### Areas (Simple Mode)
 
 | Area | Purpose |
 |------|---------|
-| **Staging** | Specs being written and refined |
-| **Working** | Specs being built into code |
-| **Build** | Completed, shippable code |
+| **Staging** | Writing specs |
+| **Building** | Writing code |
+| **Ship** | Done. Ready to deploy. |
 
-You can customize these or add your own areas.
+### Indexing (The Secret Sauce)
 
-### Area Commands
-
-```bash
-# List all areas
-osdd area list
-
-# Add a new area
-osdd area add Review
-
-# Remove an area (if empty)
-osdd area remove Review
-
-# Rename an area
-osdd area rename Staging Draft
-
-# Set default area
-osdd area default Working
-
-# Check area health
-osdd area health
-```
-
-## Topics
-
-**Topics** are the core unit of work in OpenSDD. A topic contains:
-
-- `spec.md` - The specification
-- `tasks.md` - Checkable tasks
-- Linked files - Code, tests, docs
-
-### Topic Commands
+This is what makes UniSpec actually useful:
 
 ```bash
-# Create a topic
-osdd topic add "User Authentication" -a Staging
+# Link code to a spec
+unispec index add --topic "user-login" --path src/auth/login.rs
+unispec index add --topic "user-login" --path tests/login_test.py
 
-# List topics
-osdd topic list -a Staging
-
-# Push to another area
-osdd topic push "User Authentication" Working
-
-# Show topic details
-osdd topic show user-authentication
-
-# Check progress
-osdd topic progress -a Working
-
-# Remove a topic
-osdd topic remove user-authentication
+# Now AI knows which code implements which feature
 ```
 
-## Index - Linking Files to Specs
+When your agents query a spec, they see the actual code too. Not just words.
 
-The index connects your specs to the actual files:
+### Modes
+
+
+Out of the box, UniSpec comes with Simple Mode. Here's how it works:
+
+```
+Spec → Build → Verify
+```
+
+That's it. Three areas. Clear boundaries. Magic optional.
+
+You can make UniSpec yours by creating your own modes. Check the docs for features including:
+
+- MCP tooling commands
+- Area scripting
+- New agent abilities
+
+Custom workflows for different teams:
+
+- `.agent/modes/simple/` - Default (spec → build → ship)
+- `.agent/modes/custom/` - Create your own workflow!
+
+## Commands at a Glance
 
 ```bash
-# Link a file to a topic
-osdd index add --topic user-auth --path src/auth/login.rs
-
-# Link a directory
-osdd index add --topic user-auth --path src/auth/ --type directory
-
-# Find what specs a file belongs to
-osdd index find src/auth/login.rs --by path
-
-# Find files linked to a spec
-osdd index find user-auth --by topic
-
-# Full index stats
-osdd index full
+unispec init                          # Set up project
+unispec                               # Launch TUI
+unispec topic add "Feature"           # Create spec
+unispec topic push "Feature" Ship    # Move to deploy
+unispec index add --topic "feature" --path src/main.rs  # Link code
+unispec topic progress                 # See status
 ```
 
-## Agent Modes
+## Editor Integrations
 
-OpenSDD supports different **modes** that define:
-- Agent persona and behavior
-- Workflow steps
-- Custom templates
-- Area definitions
-
-### Mode Commands
+UniSpec plays nice with 24 AI editors. When you run `unispec init`, it can set up your editor:
 
 ```bash
-# List available modes
-osdd mode list
-
-# Show mode details
-osdd mode info simple
-
-# Activate a mode
-osdd mode activate simple
-
-# Add a custom mode
-osdd mode add /path/to/my-mode
-
-# Remove a mode
-osdd mode remove custom-mode
-
-# Show current mode
-osdd mode current
+unispec init --cursor --cline --windsurf
 ```
 
-### Modes Directory
+Supported editors:
 
-Modes are stored in:
-- **Local**: `.agent/modes/<mode_name>/`
-- **Global**: `~/.config/osdd/modes/<mode_name>/`
+| Editor | CLI Flag | Editor | CLI Flag |
+|--------|----------|--------|----------|
+| Amazon Q | `--amazon-q` | Kilo Code | `--kilo-code` |
+| Antigravity | `--antigravity` | Kiro | `--kiro` |
+| Augment | `--auggie` | OpenCode | `--opencode` |
+| Claude Code | `--claude-code` | Pi | `--pi` |
+| Cline | `--cline` | Qoder | `--qoder` |
+| Codex | `--codex` | Qwen Code | `--qwen-code` |
+| CodeBuddy | `--codebuddy` | RooCode | `--roo-code` |
+| Continue | `--continue` | Windsurf | `--windsurf` |
+| CoStrict | `--costrict` | TRAE | `--trae` |
+| Crush | `--crush` | Cursor | `--cursor` |
+| Factory | `--factory` | Gemini CLI | `--gemini-cli` |
+| GitHub | `--github` | iFlow | `--iflow` |
 
-See [Simple Mode Documentation](docs/simple-mode/) for the default mode.
+Or use `--all` to set up all of them.
 
-## Connectors
+**Bonus:** I use Zed - just copy the commands into the Rules. Highly recommend Zed!
 
-Connectors are custom commands that become MCP tools for AI agents:
+## What Goes In A Spec?
 
-```bash
-# Create a connector
-osdd connector new test "Run test suite" "pytest" "tests/" "-v"
+1. What problem are we solving?
+2. Who is this for?
+3. What are we building? (be specific)
+4. How do we know it's done? (acceptance criteria)
+5. What's NOT included?
 
-# List connectors
-osdd connector list
+Then `tasks.md` breaks it into actionable chunks with notes about implementations and challenges.
 
-# Run a connector
-osdd connector run test
+## Meeting Paddy the Platypus
 
-# Edit description
-osdd connector edit test "Run the full test suite with verbose output"
+There's a platypus named **Paddy** in the TUI. He's here to be like your personal cheerleader for all you ADHD GenZ Tik-Tok glued addicts like myself. He is just a reminder that you can do it! Toggle him with `\` in the TUI.
 
-# Delete a connector
-osdd connector delete test
+He believes in you.
 
-# Generate MCP config (for Claude Desktop, etc.)
-osdd connector mcp
-```
+## What's Next?
 
-### Example MCP Configuration
-
-```json
-{
-  "mcpServers": {
-    "osdd": {
-      "command": "osdd",
-      "args": ["connector", "mcp"]
-    }
-  }
-}
-```
-
-## Platypus Control
-
-Patty the Platypus can be toggled on/off:
-
-```bash
-# Enable platypus (shows after commands)
-osdd patty enable
-
-# Disable platypus
-osdd patty disable
-
-# Check status
-osdd patty status
-```
-
-**Secret**: Press `\` in the TUI to toggle Patty.
-
-## Configuration
-
-Config lives in `.agent/config.toml`:
-
-```toml
-# OpenSDD Agent Configuration
-
-# Current active mode
-current_mode = "simple"
-
-# Default area for topic operations
-default_area = "Working"
-
-# Protected areas that cannot be deleted
-protected_areas = ["Staging", "Working", "Build"]
-
-# Connectors - Custom commands that become MCP tools
-[[connector]]
-name = "test"
-description = "Run the test suite"
-command = "pytest"
-args = ["tests/", "-v"]
-```
-
-## Integrating with AI Agents
-
-OpenSDD is designed for AI-assisted development. Here's how to use it with different agents:
-
-### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "osdd": {
-      "command": "osdd",
-      "args": ["connector", "mcp"]
-    }
-  }
-}
-```
-
-### Continue (VS Code / JetBrains)
-
-Add to `.continue/config.json`:
-
-```json
-{
-  "models": [{
-    "title": "Claude",
-    "provider": "anthropic"
-  }],
-  "mcpServers": {
-    "osdd": {
-      "command": "osdd",
-      "args": ["connector", "mcp"]
-    }
-  }
-}
-```
-
-### Zed
-
-Add to `.zed/settings.json`:
-
-```json
-{
-  "lsp": {
-    "osdd": {
-      "command": "osdd",
-      "args": ["connector", "mcp"]
-    }
-  }
-}
-```
-
-## Editor Setup
-
-### VS Code
-
-Create `.vscode/tasks.json` for quick commands:
-
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "OpenSDD: Launch TUI",
-      "type": "shell",
-      "command": "osdd"
-    },
-    {
-      "label": "OpenSDD: List Topics",
-      "type": "shell", 
-      "command": "osdd topic list",
-      "problemMatcher": []
-    },
-    {
-      "label": "OpenSDD: Area Health",
-      "type": "shell",
-      "command": "osdd area health",
-      "problemMatcher": []
-    }
-  ]
-}
-```
-
-**VS Code Keybindings** - Add to `keybindings.json`:
-
-```json
-[
-  {
-    "key": "ctrl+shift+s",
-    "command": "workbench.action.tasks.runTask",
-    "args": "OpenSDD: Launch TUI"
-  }
-]
-```
-
-### Neovim
-
-Add to your `init.lua`:
-
-```lua
-vim.api.nvim_create_user_command('Osdd', function()
-  vim.fn.jobstart({'osdd'}, { detach = true })
-end, {})
-
-vim.api.nvim_create_user_command('OsddList', function()
-  vim.fn.jobstart({'osdd', 'topic', 'list'}, {
-    stdout_buffered = true,
-    on_stdout = function(_, data)
-      print(table.concat(data, '\n'))
-    end
-  })
-end, {})
-
-vim.api.nvim_create_user_command('OsddHealth', function()
-  vim.fn.jobstart({'osdd', 'area', 'health'}, {
-    stdout_buffered = true,
-    on_stdout = function(_, data)
-      print(table.concat(data, '\n'))
-    end
-  })
-end, {})
-
--- Optional: Keybindings
-vim.keymap.set('n', '<leader>os', ':Osdd<CR>', { noremap = true, silent = true })
-vim.keymap.set('n', '<leader>ol', ':OsddList<CR>', { noremap = true, silent = true })
-vim.keymap.set('n', '<leader>oh', ':OsddHealth<CR>', { noremap = true, silent = true })
-```
-
-**LazyVim Integration**:
-
-```lua
--- in plugins/osdd.lua
-return {
-  "your-name/osdd.nvim",
-  -- or use vim.fn.executable to check
-  lazy = true,
-  cmd = { "Osdd", "OsddList" },
-  config = function()
-    -- your config
-  end
-}
-```
-
-### Helix
-
-Add to `config.toml`:
-
-```toml
-[keys.normal]
-g = { c = "osdd topic list" }  # Add a custom command
-
-[tools]
-# Helix doesn't have native task runner integration,
-# but you can use :sh in insert mode
-```
-
-### Emacs
-
-Add to `init.el`:
-
-```elisp
-(defun osdd-launch ()
-  "Launch OpenSDD TUI"
-  (interactive)
-  (let ((compilation-buffer-name-function (lambda (_) "*osdd*")))
-    (compile "osdd")))
-
-(defun osdd-topic-list ()
-  "List OpenSDD topics"
-  (interactive)
-  (shell-command "osdd topic list" "*osdd-topics*"))
-
-(defun osdd-area-health ()
-  "Show area health"
-  (interactive)
-  (shell-command "osdd area health" "*osdd-health*"))
-
-;; Keybindings
-(global-set-key (kbd "C-c o") 'osdd-launch)
-(global-set-key (kbd "C-c t") 'osdd-topic-list)
-(global-set-key (kbd "C-c h") 'osdd-area-health)
-```
-
-## Spec Template
-
-When you create a topic, you get this structure:
-
-### spec.md
-
-```markdown
-# Feature Name
-
-## Problem Statement
-
-[What problem does this solve? Why does it matter? Who experiences it?]
-
-## User Stories
-
-- As a **[user type]**, I want **[goal]** so that **[benefit]**
-- As a **[user type]**, I want **[goal]** so that **[benefit]**
-
-## Requirements
-
-### Must Have
-- [ ] Requirement 1
-- [ ] Requirement 2
-
-### Should Have
-- [ ] Requirement 3
-
-### Could Have
-- [ ] Requirement 4
-
-### Won't Have (This Iteration)
-- [ ] Requirement 5
-
-## Acceptance Criteria
-
-- [ ] Criterion 1 - How we'll verify
-- [ ] Criterion 2 - With specific metrics
-- [ ] Criterion 3
-
-## Out of Scope
-
-- What we're NOT doing in this spec
-
-## Technical Notes
-
-[Any implementation details, API design, database schema, etc.]
-
-## Dependencies
-
-- [Link to related spec]
-- External service requirements
-
-## Open Questions
-
-- [ ] Question 1?
-- [ ] Question 2?
-```
-
-### tasks.md
-
-```markdown
-# Tasks - Feature Name
-
-## Research
-- [ ] Research existing solutions
-- [ ] Evaluate third-party libraries
-- [ ] Document technical approach
-
-## Implementation
-- [ ] Implement core functionality
-- [ ] Add error handling
-- [ ] Write unit tests
-
-## Testing
-- [ ] Write integration tests
-- [ ] Manual testing checklist
-- [ ] Performance testing
-
-## Documentation
-- [ ] Update README
-- [ ] Add inline comments
-- [ ] Create runbook
-
-## Deployment
-- [ ] Deploy to staging
-- [ ] Smoke test
-- [ ] Deploy to production
-```
-
-## MCP Server
-
-Run OpenSDD as an MCP server for AI integration:
-
-```bash
-osdd mcp
-```
-
-This starts a server that AI agents can connect to for:
-- Reading specs
-- Checking task status
-- Adding/updating topics
-- Running connectors
-
-## Workflows
-
-Each mode can define custom workflows. For example, in Simple Mode:
-
-### osdd:spec
-
-1. Create topic in Staging
-2. Write spec.md with all sections
-3. Review and refine
-4. Mark tasks as ready
-
-### osdd:build
-
-1. Pull topic to Working
-2. Implement features
-3. Run tests
-4. Update tasks.md
-5. Push to Build when complete
-
-### osdd:verify
-
-1. Review Build area
-2. Run verification checklist
-3. Ship it!
-
-## Contributing
-
-We welcome contributions! See guidelines below:
-
-1. Fork the repo
-2. Create a mode or improve the core
-3. Write specs for your changes
-4. Submit a PR
-
-## License
-
-MIT - Do whatever you want with it. That's the Open in OpenSDD.
+- [Getting Started](docs/getting-started.md) - Full walkthrough
+- [Commands Reference](docs/commands.md) - All CLI commands
+- [Creating Modes](docs/modes.md) - Build custom workflows
+- [MCP Integration](docs/mcp.md) - Connect AI agents
+- [Indexing](docs/indexing.md) - Link code to specs
 
 ---
 
-## The Patty Principle
+**Remember**: Code is what computers run. Specs are what humans understand. Write the spec first, work based off understanding.
 
-Every great development tool needs a mascot. Ours is a platypus named **Patty**.
-
-Why a platypus? Because platypuses are:
-- **Unique** - Nobody else does it quite like them
-- **Adaptable** - At home in water or on land (CLI or TUI)
-- **Surprisingly capable** - Venom spurs, electroreception, egg-laying mammals
-- **A bit weird** - And that's what makes them memorable
-
-Patty's philosophy: "Every spec is a chance to build something great. I'm here to make sure you don't skip the spec."
-
-### Patty's Tips
-
-- "Write specs like you're explaining to a smart friend, not a lawyer"
-- "A task without a spec is just a guess"
-- "The index is your friend - it connects code to purpose"
-- "Don't delete areas, archive them"
-- "Push early, push often"
-
----
-
-**Remember**: Write the spec first. Patty believes in you. 🦫
-
-*"A platypus without a spec is just a weird duck."* - Patty, probably
+— Paddy the Platypus 🦫

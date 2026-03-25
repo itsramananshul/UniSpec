@@ -62,7 +62,10 @@ OTHER:
   unispec set <area>               Set default area
   unispec init [-r <path>]         Initialize project
   unispec mcp                      Launch MCP server for agent integration
-"
+  unispec repo list                List available packages
+  unispec repo install <pkg>      Install a package
+  unispec repo remove <pkg>       Remove a package
+ "
 )]
 #[command(version = crate::version::VERSION)]
 #[command(args_conflicts_with_subcommands = true)]
@@ -177,6 +180,9 @@ pub enum Commands {
     /// Agent connector commands
     #[command(subcommand)]
     Connector(ConnectorCommands),
+    /// Manage repository packages (list, install, remove)
+    #[command(subcommand)]
+    Repo(RepoCommands),
     /// Control platypus mascot display
     #[command(subcommand)]
     Patty(PattyCommands),
@@ -409,4 +415,47 @@ pub enum PattyCommands {
     Disable,
     /// Show current status
     Status,
+}
+
+#[derive(Subcommand)]
+pub enum RepoCommands {
+    /// List available packages from the repository
+    List {
+        /// Repository URL (default: official UniSpec repo)
+        #[arg(short, long)]
+        repo: Option<String>,
+    },
+    /// Search for packages
+    Search {
+        /// Search query
+        query: String,
+        /// Repository URL (default: official UniSpec repo)
+        #[arg(short, long)]
+        repo: Option<String>,
+    },
+    /// Install a package
+    Install {
+        /// Package name or GitHub URL
+        package: String,
+        /// Install globally (system-wide)
+        #[arg(short, long)]
+        global: bool,
+        /// Repository URL (default: official UniSpec repo)
+        #[arg(short, long)]
+        repo: Option<String>,
+    },
+    /// Remove an installed package
+    Remove {
+        /// Package name to remove
+        package: String,
+        /// Remove from global installation
+        #[arg(short, long)]
+        global: bool,
+    },
+    /// List installed packages
+    Installed {
+        /// Show globally installed packages
+        #[arg(short, long)]
+        global: bool,
+    },
 }

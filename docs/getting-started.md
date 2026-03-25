@@ -1,65 +1,57 @@
-# Getting Started with OpenSDD
+# Getting Started with UniSpec
 
-Welcome! This guide will help you go from zero to spec-driven development hero in 10 minutes.
+This guide walks you from "what is this?" to shipping your first spec-driven feature.
 
-## What You'll Build
+## Prerequisites
 
-By the end of this guide, you'll have:
-- A working OpenSDD project
-- Your first spec
-- A clear understanding of the workflow
+- Rust (for building from source) or a pre-built binary
+- A terminal (the TUI needs it)
 
-## Step 1: Installation
+## Installation
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourname/osdd.git
-cd osdd
+git clone https://github.com/uwzis/unispec.git
+cd unispec
 cargo install --path .
 ```
 
-### From Binary (when published)
+### From AUR (Arch Linux)
 
 ```bash
-# macOS
-brew install osdd
-
-# Linux
-curl -fsSL https://install.osdd.dev | bash
-
-# Windows (PowerShell)
-iwr https://install.osdd.dev | iex
+paru -S unispec
 ```
 
-Verify installation:
+Verify:
 
 ```bash
-osdd --version
+unispec --version
 ```
 
-## Step 2: Initialize Your Project
+## Step 1: Initialize Your Project
 
 ```bash
-mkdir my-awesome-project
-cd my-awesome-project
-osdd init
+mkdir my-project
+cd my-project
+unispec init
 ```
 
 You'll see:
 
 ```
-   ██████╗ ██████╗ ███████╗███╗   ██╗
-  ██╔═══██╗██╔══██╗██╔════╝████╗  ██║
-  ██║   ██║██████╔╝█████╗  ██╔██╗ ██║
-  ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║
-  ╚██████╔╝██║     ███████╗██║ ╚████║
-   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝
-                                             
-OpenSDD initialized with Simple Mode!
+ ██╗   ██╗███╗   ██╗██╗    ███████╗██████╗ ███████╗ ██████╗
+ ██║   ██║████╗  ██║██║    ██╔════╝██╔══██╗██╔════╝██╔════╝
+ ██║   ██║██╔██╗ ██║██║    ███████╗██████╔╝█████╗  ██║
+ ██║   ██║██║╚██╗██║██║    ╚════██║██╔═══╝ ██╔══╝  ██║
+ ╚██████╔╝██║ ╚████║██║    ███████║██║     ███████╗╚██████╗
+  ╚═════╝ ╚═╝  ╚═══╝╚═╝    ╚══════╝╚═╝     ╚══════╝ ╚═════╝
+
+UniSpec initialized with Simple Mode! -- Meet Paddy the Pladdy
 ```
 
 This creates:
+
 ```
 my-project/
 ├── spec/
@@ -72,35 +64,19 @@ my-project/
 └── .agent/
     ├── config.toml
     ├── modes/
+    ├── workflows/
     └── skill.md
 ```
 
-## Step 3: Launch the TUI
+## Step 2: Launch the TUI
 
 ```bash
-osdd
+unispec
 ```
 
-You should see:
+You'll see the TUI with Paddy the platypus (toggle him with `\`).
 
-```
-┌─────────────────────────────────────────────┐
-│ Open SDD v0.5.0  | Area: Working | Topics: 0 │
-├─────────────────────────────────────────────┤
-│                                             │
-│     ⠀⠀⠀⠀⠀⣴⠶⠶⣒⣛⣛⣛...             │
-│     ⠀⠀🦫                                │
-│                                             │
-├─────────────────────────────────────────────┤
-│ (No topics yet)                             │
-├─────────────────────────────────────────────┤
-│ 🡙 Move | 🡘 Navigate | ↵ Open | n: New | q │
-└─────────────────────────────────────────────┘
-```
-
-Congratulations! You're running OpenSDD!
-
-## Step 4: Create Your First Spec
+## Step 3: Create Your First Topic
 
 Press `n` to create a new topic. Enter:
 
@@ -108,9 +84,10 @@ Press `n` to create a new topic. Enter:
 User Login
 ```
 
-Select the Staging area when prompted.
+Select "Staging" when prompted.
 
 Now you have:
+
 ```
 spec/
 └── Staging/
@@ -119,7 +96,7 @@ spec/
         └── tasks.md     ← Your tasks go here
 ```
 
-## Step 5: Write the Spec
+## Step 4: Write the Spec
 
 Open `spec/Staging/user-login/spec.md`:
 
@@ -128,25 +105,19 @@ Open `spec/Staging/user-login/spec.md`:
 
 ## Problem Statement
 
-Users need a secure way to log into our application. Currently, 
-there's no authentication, so anyone can access anything.
+Users need a secure way to log into our application.
 
 ## User Stories
 
-- As a **new user**, I want to **register with email and password** 
-  so that I can have a personal account.
-
-- As a **returning user**, I want to **log in with email and password** 
-  so that I can access my account.
-
-- As a **forgetful user**, I want to **reset my password via email** 
-  so that I can regain access if I forget it.
+- As a **new user**, I want to **register with email and password** so I can have a personal account.
+- As a **returning user**, I want to **log in with email and password** so I can access my account.
+- As a **forgetful user**, I want to **reset my password via email** so I can regain access.
 
 ## Requirements
 
 ### Must Have
 - [ ] Email/password registration
-- [ ] Email/password login
+- [ ] Email/password login  
 - [ ] Password reset via email
 - [ ] Session management (24hr expiry)
 - [ ] Logout functionality
@@ -157,30 +128,21 @@ there's no authentication, so anyone can access anything.
 
 ## Acceptance Criteria
 
-1. User can register with valid email and password (8+ chars)
+1. User can register with valid email/password (8+ chars)
 2. User receives confirmation email on registration
-3. User can login with registered email/password
-4. Invalid login shows error, not what's wrong
-5. User can request password reset
-6. Password reset link expires after 1 hour
-7. Session expires after 24 hours of inactivity
-8. Logout invalidates session immediately
+3. User can login with registered credentials
+4. Invalid login shows generic error
+5. Password reset link expires after 1 hour
+6. Session expires after 24 hours of inactivity
 
 ## Out of Scope
 
-- Social login (Google, GitHub, etc.)
+- Social login (Google, GitHub)
 - Two-factor authentication
 - SSO integration
-- Password strength requirements (beyond length)
-
-## Technical Notes
-
-- Use bcrypt for password hashing
-- JWT tokens for session management
-- Email via existing email service (SendGrid, etc.)
 ```
 
-## Step 6: Create Tasks
+## Step 5: Create Tasks
 
 Open `spec/Staging/user-login/tasks.md`:
 
@@ -188,101 +150,84 @@ Open `spec/Staging/user-login/tasks.md`:
 # Tasks - User Login
 
 ## Backend
-- [ ] Create User model with email, password_hash
-- [ ] Add registration endpoint POST /api/auth/register
-- [ ] Add login endpoint POST /api/auth/login
-- [ ] Add logout endpoint POST /api/auth/logout
-- [ ] Add password reset request POST /api/auth/reset-request
-- [ ] Add password reset confirm POST /api/auth/reset-confirm
-- [ ] Implement JWT token generation/validation
-- [ ] Add middleware for protected routes
+- [ ] Create User model
+- [ ] Add registration endpoint
+- [ ] Add login endpoint
+- [ ] Add logout endpoint
+- [ ] Add password reset flow
+- [ ] Implement JWT tokens
 
 ## Frontend
-- [ ] Create registration form
-- [ ] Create login form
-- [ ] Create password reset request form
-- [ ] Create password reset confirm form
-- [ ] Add "Remember me" checkbox
-- [ ] Add loading states
-- [ ] Add error handling
-
-## Database
-- [ ] Create users table
-- [ ] Create sessions table
-- [ ] Create password_resets table
+- [ ] Registration form
+- [ ] Login form
+- [ ] Password reset forms
 
 ## Testing
-- [ ] Unit tests for auth functions
-- [ ] Integration tests for endpoints
-- [ ] E2E tests for user flows
-
-## Security
-- [ ] Rate limiting on login
-- [ ] Input validation
-- [ ] SQL injection prevention
-- [ ] XSS prevention
+- [ ] Unit tests for auth
+- [ ] Integration tests
 ```
 
-## Step 7: Build It
+## Step 6: Move to Working
 
-When your spec is ready, push to Working:
+When your spec is solid:
 
 ```bash
-osdd topic push "User Login" Working
+unispec topic push "User Login" Working
 ```
 
-Implement your tasks, checking them off as you go.
+Now implement. Check off tasks as you go.
 
-## Step 8: Ship It
+## Step 7: Move to Build
 
-When complete:
+When it's done and tested:
 
 ```bash
-osdd topic push "User Login" Build
+unispec topic push "User Login" Build
 ```
 
-Review, deploy, and celebrate! 🎉
+Deploy. Celebrate. You're done.
+
+## Quick Reference
+
+| Command | What it does |
+|---------|-------------|
+| `unispec` | Launch TUI |
+| `unispec init` | Initialize project |
+| `unispec topic add "Name"` | Create topic |
+| `unispec topic push "Name" Area` | Move topic |
+| `unispec topic list` | Show all topics |
+| `unispec topic progress` | Show progress |
+
+## TUI Keys
+
+| Key | Action |
+|-----|--------|
+| `↑/↓` | Move between topics |
+| `Enter` | Open topic |
+| `n` | New topic |
+| `p` | Push to area |
+| `r` | Remove topic |
+| `f` | Find links |
+| `\` | Toggle platypus |
+| `q` | Quit |
+
+## Editor Integration
+
+Want your AI editor to see your specs? Run:
+
+```bash
+unispec init --cursor --cline --windsurf
+```
+
+This creates workflow files in your editor's config folder. Now Claude/Cursor/Windsurf see your specs automatically.
 
 ## What's Next?
 
-- Explore [CLI commands](../README.md#commands)
-- Create [custom modes](../docs/simple-mode/)
-- Set up [AI integration](../README.md#integrating-with-ai-agents)
-- Configure [connectors](../README.md#connectors)
-
-## Tips
-
-### Start Small
-Don't try to spec everything at once. Start with one feature.
-
-### Be Specific
-"User can log in" is not a spec. "User enters email/password and sees dashboard" is.
-
-### Update Frequently
-As you learn, update specs. They're not carved in stone.
-
-### Link Everything
-Connect your code to specs. It helps everyone understand the why.
-
-## Troubleshooting
-
-### "No spec folder found"
-Run `osdd init` first.
-
-### "Topic already exists"
-Choose a different name or remove the existing one.
-
-### TUI looks weird
-Make sure your terminal supports Unicode and has a decent font.
-
-## Need Help?
-
-- Check the [FAQ](./FAQ.md)
-- Open an issue on GitHub
-- Ask in the community
+- [Commands Reference](commands.md) - Full CLI docs
+- [Creating Modes](modes.md) - Build custom workflows
+- [MCP Integration](mcp.md) - Connect AI agents
+- [Indexing](indexing.md) - Link code to specs
 
 ---
 
-Now you know the basics! Go forth and spec. 🦫
-
-*"The best code is code that doesn't need to be written because the spec was so good."* - Patty
+*Write the spec first. Code second. Paddy believes in you.* 🦫
