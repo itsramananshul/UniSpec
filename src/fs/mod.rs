@@ -23,16 +23,55 @@ pub fn agent_dir() -> PathBuf {
     project_root().unwrap_or_default().join(".agent")
 }
 
+fn get_global_base_dir() -> PathBuf {
+    if let Some(config_dir) = dirs::config_dir() {
+        let unispec_config = config_dir.join("unispec");
+        if unispec_config.exists() || std::fs::create_dir_all(&unispec_config).is_ok() {
+            return unispec_config;
+        }
+    }
+    #[cfg(unix)]
+    {
+        PathBuf::from("/usr/share/unispec")
+    }
+    #[cfg(windows)]
+    {
+        dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("unispec")
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("/usr/share/unispec"))
+            .join("unispec")
+    }
+}
+
 pub fn global_modes_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("unispec")
-        .join("modes")
+    get_global_base_dir().join("modes")
 }
 
 pub fn global_config_dir() -> PathBuf {
-    dirs::config_dir()
+    get_global_base_dir()
+}
+
+#[cfg(unix)]
+pub fn system_install_dir() -> PathBuf {
+    PathBuf::from("/usr/share/unispec")
+}
+
+#[cfg(windows)]
+pub fn system_install_dir() -> PathBuf {
+    dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
+        .join("unispec")
+}
+
+#[cfg(not(any(unix, windows)))]
+pub fn system_install_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("/usr/share/unispec"))
         .join("unispec")
 }
 
