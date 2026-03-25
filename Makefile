@@ -106,7 +106,13 @@ install-system: release
 	@echo "Installing $(NAME) $(VERSION) system-wide..."
 	$(MKDIR) $(DESTDIR)$(BIN_DIR)
 	$(INSTALL_BIN) target/release/$(NAME) $(DESTDIR)$(BIN_DIR)/$(NAME)
+	$(MKDIR) $(DESTDIR)$(SHARE_DIR)
+	$(CP) $(AGENT_DIR)/* $(DESTDIR)$(SHARE_DIR)/
+	@if [ -d "docs" ]; then \
+		$(CP) -r docs $(DESTDIR)$(SHARE_DIR)/; \
+	fi
 	@echo "Installed to $(DESTDIR)$(BIN_DIR)/$(NAME)"
+	@echo "Installed data to $(DESTDIR)$(SHARE_DIR)/"
 	@echo ""
 	@echo "Now setup user config:"
 	@echo "  make setup-config"
@@ -115,7 +121,8 @@ install-system: release
 # Uninstall
 uninstall:
 	$(RM) $(HOME)/.cargo/bin/$(NAME) 2>/dev/null || true
-	$(RM) $(DESTDIR)$(BIN_DIR)/$(NAME) 2>/dev/null || true
+	$(RM) $(DESTDIR)$(PREFIX)/bin/$(NAME) 2>/dev/null || true
+	$(RM) $(DESTDIR)$(PREFIX)/share/$(NAME) 2>/dev/null || true
 
 # Setup user config (convenience target)
 setup-config: install-config

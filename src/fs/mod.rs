@@ -56,6 +56,14 @@ pub fn global_config_dir() -> PathBuf {
     get_global_base_dir()
 }
 
+pub fn system_modes_dir() -> PathBuf {
+    system_install_dir().join(".agent").join("modes")
+}
+
+pub fn system_areas_dir() -> PathBuf {
+    system_install_dir().join(".agent").join("areas")
+}
+
 #[cfg(unix)]
 pub fn system_install_dir() -> PathBuf {
     PathBuf::from("/usr/share/unispec")

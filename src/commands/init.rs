@@ -30,16 +30,20 @@ pub fn run_init(root: Option<&std::path::Path>) -> Result<()> {
     // Default areas for simple mode
     let default_areas = ["Staging", "Working", "Build"];
 
-    // Copy area templates from global areas dir
-    let areas_dir = crate::fs::global_config_dir().join("areas");
+    // Copy area templates from global areas dir (or system install dir as fallback)
+    let areas_dir = crate::fs::global_config_dir().join(".agent").join("areas");
+    let system_areas_dir = crate::fs::system_areas_dir();
     for area in &default_areas {
         let area_spec_dir = spec_root.join(area);
         ensure_dir(&area_spec_dir)?;
         let area_path = area_spec_dir.join("area.md");
         if !area_path.exists() {
             let template_path = areas_dir.join(area.to_lowercase()).join("area.md");
+            let system_template = system_areas_dir.join(area.to_lowercase()).join("area.md");
             if template_path.exists() {
                 fs::copy(&template_path, &area_path)?;
+            } else if system_template.exists() {
+                fs::copy(&system_template, &area_path)?;
             }
         }
     }
@@ -53,13 +57,16 @@ pub fn run_init(root: Option<&std::path::Path>) -> Result<()> {
         fs::write(&config_file, CONFIG_TEMPLATE)?;
     }
 
-    // Copy simple mode from global if available
+    // Copy simple mode from global (or system install dir as fallback)
     let simple_mode = agent_root.join("modes").join("simple");
     if !simple_mode.exists() {
         ensure_dir(&simple_mode)?;
         let global_simple = crate::fs::global_modes_dir().join("simple");
+        let system_simple = crate::fs::system_modes_dir().join("simple");
         if global_simple.exists() {
             copy_dir_recursive(&global_simple, &simple_mode)?;
+        } else if system_simple.exists() {
+            copy_dir_recursive(&system_simple, &simple_mode)?;
         }
     }
 
