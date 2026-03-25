@@ -61,6 +61,8 @@ unispec init
 unispec
 ```
 
+<img src="tui.png" width="250" alt="Paddy the Platypus">
+
 ---
 
 ## Core Concepts 🔥
