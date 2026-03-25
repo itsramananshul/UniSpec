@@ -2,7 +2,7 @@
 
 ![Paddy the Platypus](https://img.shields.io/badge/Platypus-Patty-FF6B6B?style=for-the-badge)
 
-**OpenSDD** is a spec-first development methodology with a TUI interface that helps teams write specs before they write code, track progress across areas, and build software with confidence. Plus, there's a platypus.
+**UniSpec** is a spec-driven development methodology with a TUI interface that helps teams write specs before they write code, track progress across areas, and build software with confidence. Plus, there's a platypus.
 
 ## The Vision
 
