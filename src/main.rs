@@ -144,10 +144,6 @@ fn main() -> Result<()> {
             } else {
                 init::run_init(root.as_deref())?;
             }
-
-            if get_show_platypus() {
-                platypus::happy();
-            }
         }
         Some(Commands::Set { area }) => {
             set::run_set(&area)?;
