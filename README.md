@@ -1,6 +1,6 @@
 # UniSpec
 
-<img src="paddy.png" width="200" alt="Paddy the Platypus">
+<img src="paddy.png" width="250" alt="Paddy the Platypus">
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
