@@ -89,20 +89,35 @@ unispec index add --topic "user-login" --path tests/login_test.py
 
 Custom workflows for different teams:
 - `.agent/modes/simple/` - Default (spec → build → ship)
-- `.agent/modes/sprint/` - Sprint-based
-- `.agent/modes/docs/` - Documentation-first
+- `.agent/modes/complex/`- Advanced workflows
+- `.agent/modes/ingest/` - Create specs from code
 
 ---
 
-## Commands at a Glance
+## Using Packages
 
+You can install custom nodes from the community, [Here](https://github.com/uwzis/UniSpec-Modes) for more details.
 ```bash
-unispec init                          # Set up project
-unispec                               # Launch TUI
-unispec topic add "Feature"           # Create spec
-unispec topic push "Feature" Ship    # Move to deploy
-unispec index add --topic "feature" --path src/main.rs  # Link code
-unispec topic progress                 # See status
+# List available packages
+unispec repo list
+
+# Install a package to current project
+unispec repo install default-modes
+
+# Install globally (system-wide)
+unispec repo install default-modes --global
+
+# Install from a GitHub URL directly
+unispec repo install https://github.com/username/unispec-modes
+
+# List installed packages
+unispec repo installed
+
+# List globally installed packages
+unispec repo installed --global
+
+# Remove a package
+unispec repo remove sprint-mode
 ```
 
 ---
