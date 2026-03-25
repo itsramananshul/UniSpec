@@ -1,14 +1,37 @@
-# UniSpec - Spec-Driven Development That Doesn't Suck
+# UniSpec
+
+<img src="paddy.png" width="200" alt="Paddy the Platypus">
+
+[![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.0.3-blue?style=for-the-badge)](https://crates.io/crates/unispec)
+[![Status](https://img.shields.io/badge/status-ready-orange?style=for-the-badge)](https://github.com/uwzis/unispec)
+[![Arch Package](https://img.shields.io/badge/Arch-AUR-blue?style=for-the-badge&logo=arch-linux)](https://aur.archlinux.org/packages/unispec)
+[![Built with Love](https://img.shields.io/badge/Built%20with-%E2%9D%A4%EF%B8%8F-red?style=for-the-badge)](https://github.com/uwzis/unispec)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-yellow?style=for-the-badge)](https://github.com/uwzis/unispec/pulls)
+[![Stars](https://img.shields.io/github/stars/uwzis/unispec?style=for-the-badge&color=gold)](https://github.com/uwzis/unispec/stargazers)
+[![Forks](https://img.shields.io/github/forks/uwzis/unispec?style=for-the-badge&color=purple)](https://github.com/uwzis/unispec/network)
+[![Build](https://img.shields.io/github/actions/workflow/status/uwzis/unispec/test?style=for-the-badge)](https://github.com/uwzis/unispec/actions)
+
+
+
+---
+
+## Spec-Driven Development That Doesn't Suck 🔥
 
 Write specs. Build code. Ship software. Structured clarity for humans and clankers alike! No more cognitive debt. All in our favorite RustLang 🦀
 
-## The Problem
+---
+
+## The Problem 🔥
 
 You write code. Then you write more code. Then someone asks "wait, what are we building again?" and nobody remembers. Your AI models constantly hallucinate and go on a bender while your team has no idea how things work. But it just works... for now.
 
 For us, we're creating a frontier infrastructure project and found that spec-driven development gave us some efficiency at waterfalling, but became a nightmare when debugging large and complex codebases. Using OpenSpec, BMAD, and SpecKit was starting to destroy our work.
 
-## The Fix
+---
+
+## The Fix 🔥
 
 UniSpec is a fully open source spec-driven development orchestrator that allows you to build your own spec-driven workflows that can work inside production environments. This allows you to create specs in a tree-like format so your code is fully referenced and documented.
 
@@ -18,9 +41,9 @@ This splits up the development process into 3 concepts:
 - **Areas** – Specification workspaces designed for your objectives
 - **Topics** – Defined subjects that can nest into trees of specifications
 
+---
 
-
-## Quick Start
+## Quick Start 🔥
 
 ```bash
 # Install from source
@@ -39,7 +62,9 @@ unispec init
 unispec
 ```
 
-## Core Concepts
+---
+
+## Core Concepts 🔥
 
 ### Areas (Simple Mode)
 
@@ -51,8 +76,6 @@ unispec
 
 ### Indexing (The Secret Sauce)
 
-This is what makes UniSpec actually useful:
-
 ```bash
 # Link code to a spec
 unispec index add --topic "user-login" --path src/auth/login.rs
@@ -61,31 +84,16 @@ unispec index add --topic "user-login" --path tests/login_test.py
 # Now AI knows which code implements which feature
 ```
 
-When your agents query a spec, they see the actual code too. Not just words.
-
 ### Modes
 
-
-Out of the box, UniSpec comes with Simple Mode. Here's how it works:
-
-```
-Spec → Build → Verify
-```
-
-That's it. Three areas. Clear boundaries. Magic optional.
-
-You can make UniSpec yours by creating your own modes. Check the docs for features including:
-
-- MCP tooling commands
-- Area scripting
-- New agent abilities
-
 Custom workflows for different teams:
-
 - `.agent/modes/simple/` - Default (spec → build → ship)
-- `.agent/modes/custom/` - Create your own workflow!
+- `.agent/modes/sprint/` - Sprint-based
+- `.agent/modes/docs/` - Documentation-first
 
-## Commands at a Glance
+---
+
+## Commands at a Glance 🔥
 
 ```bash
 unispec init                          # Set up project
@@ -96,7 +104,9 @@ unispec index add --topic "feature" --path src/main.rs  # Link code
 unispec topic progress                 # See status
 ```
 
-## Editor Integrations
+---
+
+## Editor Integrations 🔥
 
 UniSpec plays nice with 24 AI editors. When you run `unispec init`, it can set up your editor:
 
@@ -125,7 +135,9 @@ Or use `--all` to set up all of them.
 
 **Bonus:** I use Zed - just copy the commands into the Rules. Highly recommend Zed!
 
-## What Goes In A Spec?
+---
+
+## What Goes In A Spec? 🔥
 
 1. What problem are we solving?
 2. Who is this for?
@@ -133,21 +145,26 @@ Or use `--all` to set up all of them.
 4. How do we know it's done? (acceptance criteria)
 5. What's NOT included?
 
-Then `tasks.md` breaks it into actionable chunks with notes about implementations and challenges.
+Then `tasks.md` breaks it into actionable chunks.
 
-## Meeting Paddy the Platypus
+---
+
+## Meeting Paddy the Platypus 🔥
 
 There's a platypus named **Paddy** in the TUI. He's here to be like your personal cheerleader for all you ADHD GenZ Tik-Tok glued addicts like myself. He is just a reminder that you can do it! Toggle him with `\` in the TUI.
 
-He believes in you.
+He believes in you. 🦫
 
-## What's Next?
+---
+
+## What's Next? 🔥
 
 - [Getting Started](docs/getting-started.md) - Full walkthrough
 - [Commands Reference](docs/commands.md) - All CLI commands
 - [Creating Modes](docs/modes.md) - Build custom workflows
 - [MCP Integration](docs/mcp.md) - Connect AI agents
 - [Indexing](docs/indexing.md) - Link code to specs
+- [Repository](repo/README.md) - Community modes & packages
 
 ---
 
