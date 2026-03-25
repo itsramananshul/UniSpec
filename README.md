@@ -11,7 +11,6 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-yellow?style=for-the-badge)](https://github.com/uwzis/unispec/pulls)
 [![Stars](https://img.shields.io/github/stars/uwzis/unispec?style=for-the-badge&color=gold)](https://github.com/uwzis/unispec/stargazers)
 [![Forks](https://img.shields.io/github/forks/uwzis/unispec?style=for-the-badge&color=purple)](https://github.com/uwzis/unispec/network)
-[![Build](https://img.shields.io/github/actions/workflow/status/uwzis/unispec/test?style=for-the-badge)](https://github.com/uwzis/unispec/actions)
 
 
 
