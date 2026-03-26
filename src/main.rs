@@ -219,10 +219,19 @@ fn main() -> Result<()> {
                 path,
                 area,
                 link_type,
+                tags,
+                annotation,
             } => {
                 let area = area.unwrap_or_else(|| "Working".to_string());
                 let link_type = link_type.unwrap_or_else(|| index::detect_type(&path));
-                index::run_add(&topic, &path, &area, &link_type)?;
+                index::run_add(
+                    &topic,
+                    &path,
+                    &area,
+                    &link_type,
+                    tags.as_deref(),
+                    annotation.as_deref(),
+                )?;
                 if get_show_platypus() {
                     platypus::happy();
                 }
@@ -233,8 +242,8 @@ fn main() -> Result<()> {
                     platypus::sad();
                 }
             }
-            IndexCommands::List { topic, path } => {
-                index::run_list(topic.as_deref(), path.as_deref())?;
+            IndexCommands::List { topic, path, tag } => {
+                index::run_list(topic.as_deref(), path.as_deref(), tag.as_deref())?;
             }
             IndexCommands::Find { query, by } => {
                 index::run_find(&query, &by)?;
@@ -242,6 +251,9 @@ fn main() -> Result<()> {
             IndexCommands::Full => index::run_full()?,
             IndexCommands::Watch => index::run_watch()?,
             IndexCommands::Cleanup => index::run_cleanup()?,
+            IndexCommands::Tags => index::run_tags()?,
+            IndexCommands::Graph => index::run_graph()?,
+            IndexCommands::Backlinks { topic } => index::run_backlinks(&topic)?,
         },
         Some(Commands::Mcp { path }) => {
             let path_str = path.map(|p| p.to_string_lossy().to_string());

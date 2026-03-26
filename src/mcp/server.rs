@@ -87,7 +87,8 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
         "index_list" => {
             let topic = args.get("topic").and_then(|v| v.as_str());
             let path = args.get("path").and_then(|v| v.as_str());
-            crate::commands::index::run_list(topic, path)?;
+            let tag = args.get("tag").and_then(|v| v.as_str());
+            crate::commands::index::run_list(topic, path, tag)?;
             Ok(json!({ "success": true }))
         }
         "index_add" => {
@@ -102,7 +103,9 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| crate::commands::index::detect_type(path));
-            crate::commands::index::run_add(topic, path, area, &link_type)?;
+            let tags = args.get("tags").and_then(|v| v.as_str());
+            let annotation = args.get("annotation").and_then(|v| v.as_str());
+            crate::commands::index::run_add(topic, path, area, &link_type, tags, annotation)?;
             Ok(json!({ "success": true }))
         }
         "index_remove" => {
@@ -114,12 +117,47 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
         "index_find" => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap();
             let by = args.get("by").and_then(|v| v.as_str()).unwrap_or("topic");
-            crate::commands::index::run_find(query, by)?;
-            Ok(json!({ "success": true }))
+
+            let links = match by {
+                "topic" => crate::fs::index::find_by_topic(query)?,
+                "path" => crate::fs::index::find_by_path(query)?,
+                "tag" => crate::fs::index::find_by_tag(query)?,
+                "annotation" => crate::fs::index::find_by_annotation(query)?,
+                _ => return Err(anyhow::anyhow!("Unknown search type: {}", by)),
+            };
+
+            let links_json: Vec<serde_json::Value> = links
+                .iter()
+                .map(|l| {
+                    serde_json::json!({
+                        "topic": l.topic,
+                        "area": l.area,
+                        "path": l.path,
+                        "type": l.link_type,
+                        "tags": l.tags,
+                        "annotation": l.annotation
+                    })
+                })
+                .collect();
+
+            Ok(json!({ "success": true, "links": links_json }))
         }
         "index_cleanup" => {
             crate::commands::index::run_cleanup()?;
             Ok(json!({ "success": true }))
+        }
+        "index_tags" => {
+            let tags = crate::fs::index::list_all_tags()?;
+            Ok(json!({ "success": true, "tags": tags }))
+        }
+        "index_graph" => {
+            let graph = crate::fs::index::export_graph()?;
+            Ok(json!({ "success": true, "graph": graph }))
+        }
+        "index_backlinks" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let md = crate::fs::index::generate_backlinks_file(topic, "Working")?;
+            Ok(json!({ "success": true, "backlinks": md }))
         }
         "config_get" => {
             let config = crate::fs::config::load_config()?;

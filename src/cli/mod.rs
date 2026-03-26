@@ -371,6 +371,12 @@ pub enum IndexCommands {
         /// Type: 'file' or 'directory' (auto-detected if not specified)
         #[arg(short, long)]
         link_type: Option<String>,
+        /// Tags (comma-separated)
+        #[arg(short, long)]
+        tags: Option<String>,
+        /// Annotation/note about this link
+        #[arg(short, long)]
+        annotation: Option<String>,
     },
     /// Remove a link between a topic and a path
     Remove {
@@ -389,12 +395,15 @@ pub enum IndexCommands {
         /// Filter by path
         #[arg(short, long)]
         path: Option<String>,
+        /// Filter by tag
+        #[arg(short, long)]
+        tag: Option<String>,
     },
-    /// Find links by topic or path
+    /// Find links by topic, path, or tag
     Find {
-        /// Query (topic name or path)
+        /// Query (topic name, path, or tag)
         query: String,
-        /// Search by: 'topic' or 'path'
+        /// Search by: 'topic', 'path', or 'tag'
         #[arg(short, long, default_value = "topic")]
         by: String,
     },
@@ -404,6 +413,16 @@ pub enum IndexCommands {
     Watch,
     /// Clean up orphaned links (topics/paths that no longer exist)
     Cleanup,
+    /// List all unique tags in the index
+    Tags,
+    /// Generate graph.json for visualization
+    Graph,
+    /// Generate backlinks file for a topic
+    Backlinks {
+        /// Topic name
+        #[arg(short, long)]
+        topic: String,
+    },
 }
 
 #[derive(Subcommand)]

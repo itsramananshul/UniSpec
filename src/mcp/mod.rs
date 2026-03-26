@@ -277,18 +277,18 @@ pub fn get_tools() -> Vec<Tool> {
         },
         Tool {
             name: "index_find".to_string(),
-            description: "Find links by topic or path".to_string(),
+            description: "Find links by topic, path, tag, or annotation".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Query (topic name or path)"
+                        "description": "Query (topic name, path, tag, or annotation text)"
                     },
                     "by": {
                         "type": "string",
-                        "description": "Search by: 'topic' or 'path'",
-                        "enum": ["topic", "path"],
+                        "description": "Search by: 'topic', 'path', 'tag', or 'annotation'",
+                        "enum": ["topic", "path", "tag", "annotation"],
                         "default": "topic"
                     }
                 },
@@ -301,6 +301,36 @@ pub fn get_tools() -> Vec<Tool> {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {}
+            }),
+        },
+        Tool {
+            name: "index_tags".to_string(),
+            description: "List all unique tags in the index".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        Tool {
+            name: "index_graph".to_string(),
+            description: "Export index as graph JSON for visualization".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        Tool {
+            name: "index_backlinks".to_string(),
+            description: "Generate backlinks markdown for a topic".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic name to get backlinks for"
+                    }
+                },
+                "required": ["topic"]
             }),
         },
         Tool {

@@ -1,6 +1,6 @@
 # Indexing
 
-Indexing links your specs to your code. When you index a file to a topic, AI agents can find the relevant code when working on that spec.
+Indexing links your specs to your code. When you index a file to a topic, AI agents can find the relevant code when working on that spec. The index now supports tags, annotations, and provides graph visualization and backlinks.
 
 ## Why Index?
 
@@ -13,17 +13,24 @@ With indexing:
 - AI sees "this file is for the user-login feature"
 - Automatic context when reading specs
 - Traceability from code to requirements
+- Searchable by tags and annotations
 
 ## Basic Usage
 
 ### Add a Link
 
 ```bash
-# Link a file to a topic
+# Link a file to a topic (basic)
 unispec index add --topic "user-login" --path src/auth/login.rs
 
 # Link a directory
 unispec index add --topic "user-login" --path src/auth/
+
+# Link with tags
+unispec index add --topic "user-login" --path src/auth/login.rs --tags "auth,backend,security"
+
+# Link with an annotation
+unispec index add --topic "user-login" --path src/auth/login.rs --annotation "Core login logic, handles password verification"
 ```
 
 ### List Links
@@ -37,6 +44,9 @@ unispec index list --topic "user-login"
 
 # Links for a file
 unispec index list --path src/auth/login.rs
+
+# Links with a specific tag
+unispec index list --tag backend
 ```
 
 ### Find Links
@@ -47,6 +57,12 @@ unispec index find "user-login" --by topic
 
 # Find by file path
 unispec index find "login.rs" --by path
+
+# Find by tag
+unispec index find "security" --by tag
+
+# Find by annotation text
+unispec index find "password" --by annotation
 ```
 
 ### Remove a Link
@@ -55,21 +71,211 @@ unispec index find "login.rs" --by path
 unispec index remove --topic "user-login" --path src/auth/login.rs
 ```
 
-## How Indexing Works
+## Enhanced Index Format
 
-The index stores:
-- Topic name
-- File path
-- Link type (file, directory)
-- Added date
+The index now stores rich metadata:
 
+```toml
+[[links]]
+topic = "user-login"
+area = "Working"
+path = "src/auth/login.rs"
+type = "file"
+added = "2026-03-26T10:00:00Z"
+tags = ["auth", "backend", "security"]
+annotation = "Core login logic"
 ```
-spec/
-└── Staging/
-    └── user-login/
-        └── .index/           # Auto-generated
-            └── links.json   # Stored links
+
+### Fields
+
+| Field | Description |
+|-------|-------------|
+| `topic` | Topic name |
+| `area` | Area containing the topic |
+| `path` | File or directory path |
+| `type` | "file" or "directory" |
+| `added` | Timestamp when linked |
+| `tags` | List of tags for categorization |
+| `annotation` | Optional note about why linked |
+
+## Tags
+
+Tags allow you to categorize and filter links.
+
+### Adding Tags
+
+```bash
+# Add tags when creating a link
+unispec index add --topic "payment" --path src/payment/stripe.rs --tags "payments,stripe,backend"
+
+# Multiple tags (comma-separated)
+unispec index add --topic "user-auth" --path src/auth/ --tags "auth,security,api"
 ```
+
+### Searching by Tag
+
+```bash
+# Find all links with a tag
+unispec index find "backend" --by tag
+
+# List links filtered by tag
+unispec index list --tag security
+```
+
+### Listing All Tags
+
+```bash
+# See all tags in the index
+unispec index tags
+```
+
+Output:
+```
+Tags in index:
+  backend (15 links)
+  security (8 links)
+  auth (12 links)
+  frontend (6 links)
+```
+
+## Annotations
+
+Annotations add context to links - why is this file linked?
+
+```bash
+# Add annotation when linking
+unispec index add \
+  --topic "user-login" \
+  --path src/auth/validate.rs \
+  --annotation "Contains password hashing and validation logic"
+
+# Search by annotation content
+unispec index find "password" --by annotation
+```
+
+## Graph Export
+
+Export the index as a graph JSON for visualization tools:
+
+```bash
+unispec index graph
+```
+
+Output:
+```json
+{
+  "nodes": [
+    {"id": "topic-user-login", "topic": "user-login", "area": "Working", "path": "", "tags": []},
+    {"id": "path-src-auth-login-rs", "topic": "user-login", "area": "Working", "path": "src/auth/login.rs", "tags": ["auth"]}
+  ],
+  "edges": [
+    {"source": "topic-user-login", "target": "path-src-auth-login-rs", "type": "links_to"}
+  ]
+}
+```
+
+This can be visualized in tools like:
+- Obsidian
+- Gephi
+- D3.js
+- Graphviz
+
+## Backlinks
+
+Generate a backlinks file for any topic:
+
+```bash
+unispec index backlinks --topic "user-login"
+```
+
+Output:
+```
+# Backlinks: user-login
+
+Area: Working
+
+## Linked Files
+
+- [src/auth/login.rs](src/auth/login.rs) - Core login logic
+- [src/auth/password.rs](src/auth/password.rs) - password handling
+- [tests/login_test.py](tests/login_test.py) - test coverage
+
+## Tags
+
+- auth
+- backend
+- security
+```
+
+## MCP Tools
+
+The enhanced index is available via MCP:
+
+| Tool | Description |
+|------|-------------|
+| `index_list` | List links, optionally filtered by topic, path, or tag |
+| `index_add` | Add link with tags and annotation |
+| `index_find` | Find by topic, path, tag, or annotation |
+| `index_tags` | List all unique tags |
+| `index_graph` | Export graph JSON |
+| `index_backlinks` | Generate backlinks markdown |
+
+### MCP Examples
+
+```python
+# Find links by tag
+{"name": "index_find", "arguments": {"query": "backend", "by": "tag"}}
+
+# Get graph for visualization
+{"name": "index_graph", "arguments": {}}
+
+# Get backlinks for a topic
+{"name": "index_backlinks", "arguments": {"topic": "user-login"}}
+```
+
+## Best Practices
+
+### Use Tags for Categorization
+
+```bash
+# By layer
+unispec index add --topic "api" --path api/ --tags "backend,api,rest"
+
+# By feature
+unispec index add --topic "api" --path api/v2/ --tags "backend,api,v2"
+
+# By status
+unispec index add --topic "api" --path api/legacy/ --tags "backend,api,deprecated"
+```
+
+### Use Annotations for Context
+
+```bash
+# Explain why this file is linked
+unispec index add \
+  --topic "payment" \
+  --path src/payment/stripe.rs \
+  --annotation "Main integration point - all payment flows go through here"
+
+# Note important details
+unispec index add \
+  --topic "auth" \
+  --path src/auth/jwt.rs \
+  --annotation "Token generation - handles refresh tokens differently on mobile vs web"
+```
+
+### Tag Conventions
+
+Establish conventions for consistency:
+
+| Prefix | Meaning |
+|--------|---------|
+| `backend` | Server-side code |
+| `frontend` | Client-side code |
+| `tests` | Test files |
+| `docs` | Documentation |
+| `config` | Configuration |
+| `deprecated` | Legacy code |
 
 ## Index in Action
 
@@ -82,146 +288,24 @@ User Login spec says:
 - Email/password login
 - Password reset
 
-Linked files:
-- src/auth/login.rs
+Linked files (tagged: auth, backend):
+- src/auth/login.rs (Core login logic)
 - src/auth/password.rs
-- tests/test_login.py
-```
+- tests/login_test.py
 
-The AI automatically sees the linked files.
+Files tagged 'security':
+- src/auth/rate_limit.rs
+- src/auth/mfa.rs
+```
 
 ### With MCP
 
-Query via MCP:
-
 ```
-What files are linked to the user-login topic?
-→ src/auth/login.rs
-→ src/auth/password.rs  
-→ tests/test_login.py
-→ docs/auth-flow.md
+Find all files tagged 'security' for user-login
+→ src/auth/rate_limit.rs (rate limiting)
+→ src/auth/mfa.rs (two-factor)
+→ src/auth/session.rs (session security)
 ```
-
-## Best Practices
-
-### Index Early
-
-Add links when creating a topic:
-
-```bash
-unispec topic add "API" -a Staging
-unispec index add --topic "api" --path api/
-```
-
-### Index Incrementally
-
-As you create files, link them:
-
-```bash
-# New file created
-touch src/models/user.rs
-unispec index add --topic "user-login" --path src/models/user.rs
-```
-
-### Link Tests Too
-
-Tests prove specs are met. Link them:
-
-```bash
-unispec index add --topic "user-login" --path tests/
-```
-
-## Index Patterns
-
-### By Feature
-
-```
-topic: "user-login"
-  - src/auth/login.rs
-  - src/auth/password.rs
-  - src/auth/session.rs
-  - tests/login_test.py
-  - docs/login-flow.md
-```
-
-### By Component
-
-```
-topic: "api"
-  - api/routes/
-  - api/middleware/
-  - api/models/
-```
-
-### By File Type
-
-```
-topic: "frontend"
-  - src/views/
-  - src/components/
-  - src/stores/
-```
-
-## Automation
-
-
-### Git Hooks
-
-Add to `.git/hooks/pre-commit`:
-
-```bash
-#!/bin/bash
-# Auto-index new files matching patterns
-find . -name "*.rs" -newer .git/index | while read f; do
-  echo "Indexing $f"
-done
-```
-
-## Troubleshooting
-
-### "Topic not found"
-
-Make sure the topic exists:
-```bash
-unispec topic list
-```
-
-### "File not found"
-
-Use the full path or path relative to project root:
-```bash
-unispec index add --topic "api" --path ./src/api/main.rs
-```
-
-### Index is slow
-
-Large projects can have many links. Use filtering:
-```bash
-unispec index list --topic "api" | head -20
-```
-
-## Index and Modes
-
-Different modes can have different indexing schemes:
-
-### Simple Mode
-- Link code to features
-- Link tests to features
-
-### Sprint Mode  
-- Link code to sprint items
-- Link PRs to features
-
-### Docs Mode
-- Link docs to topics
-- Link examples to APIs
-
-## Tips
-
-1. **Be consistent** - Use the same topic names
-2. **Link tests** - They're part of the spec too
-3. **Link docs** - API docs, architecture decisions
-4. **Review periodically** - Clean up stale links
 
 ## Example Workflow
 
@@ -232,15 +316,33 @@ unispec topic add "Payment API" -a Staging
 # 2. Write spec
 # ... edit spec/Staging/payment-api/spec.md
 
-# 3. Link existing code
-unispec index add --topic "payment-api" --path src/payment/
-unispec index add --topic "payment-api" --path tests/payment/
+# 3. Link code with tags and annotations
+unispec index add \
+  --topic "payment-api" \
+  --path src/payment/stripe.rs \
+  --tags "payments,stripe,backend" \
+  --annotation "Main Stripe integration"
 
-# 4. As you create files, keep linking
-touch src/payment/stripe.rs
-unispec index add --topic "payment-api" --path src/payment/stripe.rs
+unispec index add \
+  --topic "payment-api" \
+  --path src/payment/webhook.rs \
+  --tags "payments,webhook,backend" \
+  --annotation "Handles Stripe webhook events"
 
-# 5. AI can now find all payment-related code
+# 4. Link tests
+unispec index add \
+  --topic "payment-api" \
+  --path tests/payment/ \
+  --tags "payments,tests"
+
+# 5. Query by tag
+unispec index find "stripe" --by tag
+
+# 6. Get graph for visualization
+unispec index graph > graph.json
+
+# 7. Generate backlinks
+unispec index backlinks --topic "payment-api"
 ```
 
 ---
