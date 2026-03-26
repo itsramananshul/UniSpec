@@ -4,6 +4,16 @@ use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Export {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub export_type: String,
+    pub description: String,
+    pub signature: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexLink {
     pub topic: String,
     pub area: String,
@@ -15,6 +25,8 @@ pub struct IndexLink {
     pub tags: Vec<String>,
     #[serde(default)]
     pub annotation: Option<String>,
+    #[serde(default)]
+    pub exports: Vec<Export>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +74,18 @@ pub fn add_link_with_metadata(
     tags: &[String],
     annotation: Option<&str>,
 ) -> Result<()> {
+    add_link_with_exports(topic, area, path, link_type, tags, annotation, &[])
+}
+
+pub fn add_link_with_exports(
+    topic: &str,
+    area: &str,
+    path: &str,
+    link_type: &str,
+    tags: &[String],
+    annotation: Option<&str>,
+    exports: &[Export],
+) -> Result<()> {
     let mut index = load_index()?;
 
     if index
@@ -84,6 +108,7 @@ pub fn add_link_with_metadata(
         added: chrono_now(),
         tags: tags.to_vec(),
         annotation: annotation.map(String::from),
+        exports: exports.to_vec(),
     };
 
     index.links.push(link);
@@ -340,4 +365,121 @@ pub fn generate_backlinks_file(topic: &str, area: &str) -> Result<String> {
     }
 
     Ok(md)
+}
+
+pub fn get_exports_for_topic(topic: &str) -> Result<Vec<Export>> {
+    let index = load_index()?;
+    let topic_lower = topic.to_lowercase();
+    let mut exports: Vec<Export> = Vec::new();
+
+    for link in &index.links {
+        if link.topic.to_lowercase() == topic_lower {
+            exports.extend(link.exports.clone());
+        }
+    }
+
+    Ok(exports)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportQueryResult {
+    pub id: String,
+    pub topic: String,
+    pub path: String,
+    pub name: String,
+    pub export_type: String,
+    pub description: String,
+    pub signature: Option<String>,
+}
+
+pub fn find_exports(query: &str, by: &str) -> Result<Vec<ExportQueryResult>> {
+    let index = load_index();
+    if index.is_err() {
+        return Ok(vec![]);
+    }
+    let index = index.unwrap();
+    let query_lower = query.to_lowercase();
+    let mut results: Vec<ExportQueryResult> = Vec::new();
+
+    for link in &index.links {
+        for export in &link.exports {
+            let matches = match by {
+                "name" => export.name.to_lowercase().contains(&query_lower),
+                "type" => export.export_type.to_lowercase().contains(&query_lower),
+                "description" => export.description.to_lowercase().contains(&query_lower),
+                "id" => export.id.to_lowercase().contains(&query_lower),
+                _ => false,
+            };
+
+            if matches {
+                results.push(ExportQueryResult {
+                    id: export.id.clone(),
+                    topic: link.topic.clone(),
+                    path: link.path.clone(),
+                    name: export.name.clone(),
+                    export_type: export.export_type.clone(),
+                    description: export.description.clone(),
+                    signature: export.signature.clone(),
+                });
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn find_export_by_id(full_id: &str) -> Result<Option<ExportQueryResult>> {
+    let index = load_index();
+    if index.is_err() {
+        return Ok(None);
+    }
+    let index = index.unwrap();
+
+    for link in &index.links {
+        for export in &link.exports {
+            if export.id == full_id {
+                return Ok(Some(ExportQueryResult {
+                    id: export.id.clone(),
+                    topic: link.topic.clone(),
+                    path: link.path.clone(),
+                    name: export.name.clone(),
+                    export_type: export.export_type.clone(),
+                    description: export.description.clone(),
+                    signature: export.signature.clone(),
+                }));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+pub fn get_dependents(topic: &str) -> Result<Vec<ExportQueryResult>> {
+    let index = load_index();
+    if index.is_err() {
+        return Ok(vec![]);
+    }
+    let index = index.unwrap();
+    let topic_prefix = format!("{}:", topic.to_lowercase());
+    let mut dependents: Vec<ExportQueryResult> = Vec::new();
+
+    for link in &index.links {
+        if link.topic.to_lowercase() != topic.to_lowercase() {
+            for export in &link.exports {
+                if export.id.to_lowercase().starts_with(&topic_prefix) {
+                    dependents.push(ExportQueryResult {
+                        id: export.id.clone(),
+                        topic: link.topic.clone(),
+                        path: link.path.clone(),
+                        name: export.name.clone(),
+                        export_type: export.export_type.clone(),
+                        description: export.description.clone(),
+                        signature: export.signature.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(dependents)
 }

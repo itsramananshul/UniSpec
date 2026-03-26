@@ -221,6 +221,10 @@ fn main() -> Result<()> {
                 link_type,
                 tags,
                 annotation,
+                exports,
+                descriptions,
+                export_types,
+                signatures,
             } => {
                 let area = area.unwrap_or_else(|| "Working".to_string());
                 let link_type = link_type.unwrap_or_else(|| index::detect_type(&path));
@@ -231,6 +235,10 @@ fn main() -> Result<()> {
                     &link_type,
                     tags.as_deref(),
                     annotation.as_deref(),
+                    exports.as_deref(),
+                    descriptions.as_deref(),
+                    export_types.as_deref(),
+                    signatures.as_deref(),
                 )?;
                 if get_show_platypus() {
                     platypus::happy();
@@ -254,6 +262,10 @@ fn main() -> Result<()> {
             IndexCommands::Tags => index::run_tags()?,
             IndexCommands::Graph => index::run_graph()?,
             IndexCommands::Backlinks { topic } => index::run_backlinks(&topic)?,
+            IndexCommands::Exports { topic } => index::run_exports(topic.as_deref())?,
+            IndexCommands::Query { query, by } => index::run_query(&query, &by)?,
+            IndexCommands::Depends { topic } => index::run_depends(&topic)?,
+            IndexCommands::Lookup { id } => index::run_lookup(&id)?,
         },
         Some(Commands::Mcp { path }) => {
             let path_str = path.map(|p| p.to_string_lossy().to_string());

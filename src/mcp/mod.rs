@@ -334,6 +334,67 @@ pub fn get_tools() -> Vec<Tool> {
             }),
         },
         Tool {
+            name: "index_exports".to_string(),
+            description: "List exports (functions, classes, etc) for a topic".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic name to get exports for"
+                    }
+                }
+            }),
+        },
+        Tool {
+            name: "index_query".to_string(),
+            description: "Query exports by name, type, description, or ID".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    },
+                    "by": {
+                        "type": "string",
+                        "description": "Search by: name, type, description, or id",
+                        "enum": ["name", "type", "description", "id"],
+                        "default": "name"
+                    }
+                },
+                "required": ["query", "by"]
+            }),
+        },
+        Tool {
+            name: "index_depends".to_string(),
+            description: "Find what topics depend on a given topic".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic name to find dependents for"
+                    }
+                },
+                "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "index_lookup".to_string(),
+            description: "Find export by full ID (e.g., user-login:login_user)".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Full export ID (topic:name)"
+                    }
+                },
+                "required": ["id"]
+            }),
+        },
+        Tool {
             name: "config_get".to_string(),
             description: "Get the current configuration".to_string(),
             input_schema: serde_json::json!({

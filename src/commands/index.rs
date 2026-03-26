@@ -1,3 +1,4 @@
+use crate::fs::index::Export;
 use anyhow::Result;
 use std::path::Path;
 
@@ -8,14 +9,54 @@ pub fn run_add(
     link_type: &str,
     tags: Option<&str>,
     annotation: Option<&str>,
+    exports: Option<&str>,
+    descriptions: Option<&str>,
+    export_types: Option<&str>,
+    signatures: Option<&str>,
 ) -> Result<()> {
     let tags_vec: Vec<String> = tags
         .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
 
-    if tags.is_some() || annotation.is_some() {
-        crate::fs::index::add_link_with_metadata(
-            topic, area, path, link_type, &tags_vec, annotation,
+    let exports_vec: Vec<Export> = if let Some(exp) = exports {
+        let names: Vec<&str> = exp.split(',').map(|s| s.trim()).collect();
+        let descs: Vec<&str> = descriptions
+            .map(|d| d.split(',').map(|s| s.trim()).collect())
+            .unwrap_or_default();
+        let types: Vec<&str> = export_types
+            .map(|t| t.split(',').map(|s| s.trim()).collect())
+            .unwrap_or_default();
+        let sigs: Vec<&str> = signatures
+            .map(|s| s.split(';').map(|s| s.trim()).collect())
+            .unwrap_or_default();
+
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let id = format!("{}:{}", topic, name);
+                Export {
+                    id: id.clone(),
+                    name: name.to_string(),
+                    export_type: types.get(i).unwrap_or(&"function").to_string(),
+                    description: descs.get(i).unwrap_or(&"").to_string(),
+                    signature: sigs.get(i).map(|s| s.to_string()),
+                }
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    if !exports_vec.is_empty() || tags.is_some() || annotation.is_some() {
+        crate::fs::index::add_link_with_exports(
+            topic,
+            area,
+            path,
+            link_type,
+            &tags_vec,
+            annotation,
+            &exports_vec,
         )?;
     } else {
         crate::fs::index::add_link(topic, area, path, link_type)?;
@@ -27,6 +68,15 @@ pub fn run_add(
     }
     if let Some(ann) = annotation {
         println!("  Note: {}", ann);
+    }
+    if !exports_vec.is_empty() {
+        println!("  Exports:");
+        for exp in &exports_vec {
+            println!(
+                "    - {} ({}) - {}",
+                exp.name, exp.export_type, exp.description
+            );
+        }
     }
     Ok(())
 }
@@ -63,9 +113,14 @@ pub fn run_list(topic: Option<&str>, path: Option<&str>, tag: Option<&str>) -> R
                 .as_ref()
                 .map(|a| format!(" - {}", a))
                 .unwrap_or_default();
+            let exports_str = if link.exports.is_empty() {
+                String::new()
+            } else {
+                format!(" {{{} items}}", link.exports.len())
+            };
             println!(
-                "  {} | {} | {}{}{}",
-                link.topic, link.area, link.path, tags_str, ann_str
+                "  {} | {} | {}{}{}{}",
+                link.topic, link.area, link.path, tags_str, ann_str, exports_str
             );
         }
     }
@@ -142,6 +197,10 @@ pub fn run_full() -> Result<()> {
     if !tags.is_empty() {
         println!("Tags: {}", tags.join(", "));
     }
+
+    let export_count: usize = links.iter().map(|l| l.exports.len()).sum();
+    println!("Total exports: {}", export_count);
+
     Ok(())
 }
 
@@ -201,5 +260,115 @@ pub fn run_backlinks(topic: &str) -> Result<()> {
     let area = "Working";
     let md = crate::fs::index::generate_backlinks_file(topic, area)?;
     println!("{}", md);
+    Ok(())
+}
+
+pub fn run_exports(topic: Option<&str>) -> Result<()> {
+    if let Some(t) = topic {
+        let exports = crate::fs::index::get_exports_for_topic(t)?;
+        if exports.is_empty() {
+            println!("No exports for topic '{}'.", t);
+        } else {
+            println!("Exports for '{}':\n", t);
+            for exp in &exports {
+                let sig = exp
+                    .signature
+                    .as_ref()
+                    .map(|s| format!("\n    Signature: {}", s))
+                    .unwrap_or_default();
+                println!("  {} ({}){}", exp.name, exp.export_type, sig);
+                if !exp.description.is_empty() {
+                    println!("    Description: {}", exp.description);
+                }
+                println!("    ID: {}", exp.id);
+                println!();
+            }
+        }
+    } else {
+        let links = crate::fs::index::list_all()?;
+        let mut has_exports = false;
+        for link in links {
+            if !link.exports.is_empty() {
+                has_exports = true;
+                println!("Topic: {} - {}", link.topic, link.path);
+                for exp in &link.exports {
+                    println!(
+                        "  - {} ({}) - {}",
+                        exp.name, exp.export_type, exp.description
+                    );
+                }
+                println!();
+            }
+        }
+        if !has_exports {
+            println!("No exports in index.");
+        }
+    }
+    Ok(())
+}
+
+pub fn run_query(query: &str, by: &str) -> Result<()> {
+    let results = crate::fs::index::find_exports(query, by)?;
+    if results.is_empty() {
+        println!("No exports found matching '{}' by {}.", query, by);
+    } else {
+        println!("Exports matching '{}' (by {}):\n", query, by);
+        for r in &results {
+            println!("  {} ({})", r.name, r.export_type);
+            println!("    Topic: {}", r.topic);
+            println!("    Path: {}", r.path);
+            println!("    Description: {}", r.description);
+            if let Some(ref sig) = r.signature {
+                println!("    Signature: {}", sig);
+            }
+            println!("    ID: {}", r.id);
+            println!();
+        }
+    }
+    Ok(())
+}
+
+pub fn run_depends(topic: &str) -> Result<()> {
+    let dependents = crate::fs::index::get_dependents(topic)?;
+    if dependents.is_empty() {
+        println!("No topics depend on '{}'.", topic);
+    } else {
+        println!("Topics depending on '{}':\n", topic);
+        let mut by_topic: std::collections::HashMap<
+            String,
+            Vec<&crate::fs::index::ExportQueryResult>,
+        > = std::collections::HashMap::new();
+        for d in &dependents {
+            by_topic.entry(d.topic.clone()).or_default().push(d);
+        }
+        for (topic_name, exports) in by_topic {
+            println!("  {}", topic_name);
+            for exp in exports {
+                println!("    - {} ({})", exp.name, exp.id);
+            }
+            println!();
+        }
+    }
+    Ok(())
+}
+
+pub fn run_lookup(id: &str) -> Result<()> {
+    let result = crate::fs::index::find_export_by_id(id)?;
+    match result {
+        Some(exp) => {
+            println!("Found: {}", exp.id);
+            println!("  Name: {}", exp.name);
+            println!("  Type: {}", exp.export_type);
+            println!("  Topic: {}", exp.topic);
+            println!("  Path: {}", exp.path);
+            println!("  Description: {}", exp.description);
+            if let Some(ref sig) = exp.signature {
+                println!("  Signature: {}", sig);
+            }
+        }
+        None => {
+            println!("Export not found: {}", id);
+        }
+    }
     Ok(())
 }

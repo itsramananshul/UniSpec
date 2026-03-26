@@ -1,6 +1,6 @@
 # Indexing
 
-Indexing links your specs to your code. When you index a file to a topic, AI agents can find the relevant code when working on that spec. The index now supports tags, annotations, and provides graph visualization and backlinks.
+Indexing links your specs to your code. When you index a file to a topic, AI agents can find the relevant code when working on that spec. The index now supports tags, annotations, exports (capability registry), and provides graph visualization and backlinks.
 
 ## Why Index?
 
@@ -8,12 +8,39 @@ Without indexing:
 - AI doesn't know which code implements which feature
 - You have to explain context every time
 - Code-to-spec connections are lost
+- Agent A reading Agent B's code must read entire files to find what it needs
 
 With indexing:
 - AI sees "this file is for the user-login feature"
 - Automatic context when reading specs
 - Traceability from code to requirements
 - Searchable by tags and annotations
+- **Queryable exports** - find just what functions/types are available without reading all the code
+
+## The Problem Without Exports
+
+```
+Agent A on "checkout-flow" needs auth from Agent B's "user-login"
+- Must read ALL of login.rs to find usable functions (500+ lines)
+- Wasted context - just needs 3 functions
+```
+
+## The Solution: Exports / Capability Registry
+
+Now index declares what's available from each file:
+
+```
+user-login → src/auth/login.rs exports:
+  - user-login:login_user (function) - "Authenticate and create session"
+  - user-login:validate_token (function) - "Verify JWT token"  
+  - user-login:logout (function) - "Clear user session"
+```
+
+Agent A can now:
+1. Query: "what does user-login export?"
+2. Get: Just the 3 functions with descriptions
+3. Use: `from auth import login_user  # ref:index:user-login:login_user`
+4. Backlink auto-created: checkout-flow depends on user-login
 
 ## Basic Usage
 
@@ -97,8 +124,128 @@ annotation = "Core login logic"
 | `added` | Timestamp when linked |
 | `tags` | List of tags for categorization |
 | `annotation` | Optional note about why linked |
+| `exports` | List of available functions/classes/etc |
 
-## Tags
+## Exports (Capability Registry)
+
+Exports declare what's available from a linked file. This is the key feature for parallel agents - Agent A can find exactly what Agent B's topic provides without reading all the code.
+
+### Adding Exports
+
+```bash
+# Add link with exports (comma-separated names, types, descriptions)
+unispec index add \
+  --topic "user-login" \
+  --path src/auth/login.rs \
+  --exports "login_user,logout,validate_token" \
+  --descriptions "Authenticate user,Clear session,Verify token" \
+  --export-types "function,function,function"
+
+# With function signatures
+unispec index add \
+  --topic "user-login" \
+  --path src/auth/login.rs \
+  --exports "login_user" \
+  --descriptions "Authenticate and create session" \
+  --export-types "function" \
+  --signatures "fn login_user(email: String, pass: String) -> Result<User>"
+```
+
+### Export Types
+
+Available types:
+- `function` - Regular functions
+- `class` - Classes or structs
+- `endpoint` - API endpoints
+- `model` - Data models/types
+- `service` - Service definitions
+- `config` - Configuration items
+
+### Listing Exports
+
+```bash
+# List all exports for a topic
+unispec index exports --topic user-login
+
+# Output:
+# Exports for 'user-login':
+#   login_user (function)
+#     Description: Authenticate and create session
+#     ID: user-login:login_user
+#     Signature: fn login_user(email: String, pass: String) -> Result<User>
+#
+#   logout (function)
+#     Description: Clear user session
+#     ID: user-login:logout
+#
+#   validate_token (function)
+#     Description: Verify JWT token
+#     ID: user-login:validate_token
+
+# List all exports across all topics
+unispec index exports
+```
+
+### Querying Exports
+
+```bash
+# Search by name
+unispec index query "login" --by name
+
+# Search by type
+unispec index query "function" --by type
+
+# Search by description
+unispec index query "authenticate" --by description
+
+# Search by ID
+unispec index query "user-login" --by id
+```
+
+### Finding Dependencies (What Uses What)
+
+```bash
+# Find what topics depend on a given topic
+unispec index depends --topic user-login
+
+# Output:
+# Topics depending on 'user-login':
+#   checkout-flow
+#     - login_user (user-login:login_user)
+#     - validate_token (user-login:validate_token)
+```
+
+### Lookup by ID
+
+```bash
+# Find export by full ID
+unispec index lookup --id user-login:login_user
+
+# Output:
+# Found: user-login:login_user
+#   Name: login_user
+#   Type: function
+#   Topic: user-login
+#   Path: src/auth/login.rs
+#   Description: Authenticate and create session
+```
+
+### Reference Comments (Auto-Backlinks)
+
+When using another topic's exports in your code, include the reference:
+
+```python
+# Python
+from auth import login_user  # ref:index:user-login:login_user
+
+# Rust
+use auth::login_user; // ref:index:user-login:login_user
+
+# TypeScript
+import { loginUser } from './auth'; // ref:index:user-login:login_user
+```
+
+This creates automatic backlinks - when you query `index depends --topic user-login`, it will show which other topics are using its exports.
 
 Tags allow you to categorize and filter links.
 
@@ -214,15 +361,37 @@ The enhanced index is available via MCP:
 | Tool | Description |
 |------|-------------|
 | `index_list` | List links, optionally filtered by topic, path, or tag |
-| `index_add` | Add link with tags and annotation |
+| `index_add` | Add link with tags, annotation, and exports |
 | `index_find` | Find by topic, path, tag, or annotation |
 | `index_tags` | List all unique tags |
 | `index_graph` | Export graph JSON |
 | `index_backlinks` | Generate backlinks markdown |
+| `index_exports` | List exports for a topic |
+| `index_query` | Query exports by name, type, description, or ID |
+| `index_depends` | Find what topics depend on a given topic |
+| `index_lookup` | Find export by full ID |
 
 ### MCP Examples
 
 ```python
+# Get exports for a topic
+{"name": "index_exports", "arguments": {"topic": "user-login"}}
+
+# Query exports by name
+{"name": "index_query", "arguments": {"query": "login", "by": "name"}}
+
+# Query exports by type
+{"name": "index_query", "arguments": {"query": "function", "by": "type"}}
+
+# Query exports by description
+{"name": "index_query", "arguments": {"query": "authenticate", "by": "description"}}
+
+# Find what depends on a topic
+{"name": "index_depends", "arguments": {"topic": "user-login"}}
+
+# Lookup by full ID
+{"name": "index_lookup", "arguments": {"id": "user-login:login_user"}}
+
 # Find links by tag
 {"name": "index_find", "arguments": {"query": "backend", "by": "tag"}}
 

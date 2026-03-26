@@ -65,7 +65,15 @@ OTHER:
   unispec pkg list                 List available packages
   unispec pkg install <pkg>       Install a package
   unispec pkg remove <pkg>        Remove a package
-  "
+
+INDEX:
+  unispec index add --topic X --path Y [--exports a,b]  Add link with exports
+  unispec index exports --topic X   List exports for topic
+  unispec index query <q> --by name   Query exports by name/type/description
+  unispec index depends --topic X    Show what depends on topic
+  unispec index lookup --id X         Lookup export by ID
+  unispec index backlinks --topic X  Show backlinks
+ "
 )]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct Cli {
@@ -377,6 +385,18 @@ pub enum IndexCommands {
         /// Annotation/note about this link
         #[arg(short, long)]
         annotation: Option<String>,
+        /// Exports (comma-separated names)
+        #[arg(long)]
+        exports: Option<String>,
+        /// Export descriptions (comma-separated, matching exports order)
+        #[arg(long)]
+        descriptions: Option<String>,
+        /// Export types (comma-separated: function,class,endpoint,model,service,config)
+        #[arg(long)]
+        export_types: Option<String>,
+        /// Function signatures (semicolon-separated)
+        #[arg(long)]
+        signatures: Option<String>,
     },
     /// Remove a link between a topic and a path
     Remove {
@@ -422,6 +442,32 @@ pub enum IndexCommands {
         /// Topic name
         #[arg(short, long)]
         topic: String,
+    },
+    /// List exports for a topic
+    Exports {
+        /// Topic name
+        #[arg(short, long)]
+        topic: Option<String>,
+    },
+    /// Query exports by name, type, description, or ID
+    Query {
+        /// Search query
+        query: String,
+        /// Search by: name, type, description, or id
+        #[arg(short, long, default_value = "name")]
+        by: String,
+    },
+    /// Find what depends on a topic (reverse lookups)
+    Depends {
+        /// Topic name
+        #[arg(short, long)]
+        topic: String,
+    },
+    /// Find export by full ID (e.g., user-login:login_user)
+    Lookup {
+        /// Full export ID
+        #[arg(short, long)]
+        id: String,
     },
 }
 

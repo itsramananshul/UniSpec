@@ -105,7 +105,22 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 .unwrap_or_else(|| crate::commands::index::detect_type(path));
             let tags = args.get("tags").and_then(|v| v.as_str());
             let annotation = args.get("annotation").and_then(|v| v.as_str());
-            crate::commands::index::run_add(topic, path, area, &link_type, tags, annotation)?;
+            let exports = args.get("exports").and_then(|v| v.as_str());
+            let descriptions = args.get("descriptions").and_then(|v| v.as_str());
+            let export_types = args.get("export_types").and_then(|v| v.as_str());
+            let signatures = args.get("signatures").and_then(|v| v.as_str());
+            crate::commands::index::run_add(
+                topic,
+                path,
+                area,
+                &link_type,
+                tags,
+                annotation,
+                exports,
+                descriptions,
+                export_types,
+                signatures,
+            )?;
             Ok(json!({ "success": true }))
         }
         "index_remove" => {
@@ -158,6 +173,82 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
             let md = crate::fs::index::generate_backlinks_file(topic, "Working")?;
             Ok(json!({ "success": true, "backlinks": md }))
+        }
+        "index_exports" => {
+            let topic = args.get("topic").and_then(|v| v.as_str());
+            if let Some(t) = topic {
+                let exports = crate::fs::index::get_exports_for_topic(t)?;
+                let exports_json: Vec<serde_json::Value> = exports
+                    .iter()
+                    .map(|e| {
+                        serde_json::json!({
+                            "id": e.id,
+                            "name": e.name,
+                            "type": e.export_type,
+                            "description": e.description,
+                            "signature": e.signature
+                        })
+                    })
+                    .collect();
+                Ok(json!({ "success": true, "exports": exports_json }))
+            } else {
+                Ok(json!({ "success": true, "exports": [] }))
+            }
+        }
+        "index_query" => {
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap();
+            let by = args.get("by").and_then(|v| v.as_str()).unwrap_or("name");
+            let results = crate::fs::index::find_exports(query, by)?;
+            let results_json: Vec<serde_json::Value> = results
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "id": r.id,
+                        "topic": r.topic,
+                        "path": r.path,
+                        "name": r.name,
+                        "type": r.export_type,
+                        "description": r.description,
+                        "signature": r.signature
+                    })
+                })
+                .collect();
+            Ok(json!({ "success": true, "results": results_json }))
+        }
+        "index_depends" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let dependents = crate::fs::index::get_dependents(topic)?;
+            let deps_json: Vec<serde_json::Value> = dependents
+                .iter()
+                .map(|d| {
+                    serde_json::json!({
+                        "topic": d.topic,
+                        "id": d.id,
+                        "name": d.name,
+                        "type": d.export_type
+                    })
+                })
+                .collect();
+            Ok(json!({ "success": true, "dependents": deps_json }))
+        }
+        "index_lookup" => {
+            let id = args.get("id").and_then(|v| v.as_str()).unwrap();
+            let result = crate::fs::index::find_export_by_id(id)?;
+            match result {
+                Some(exp) => Ok(json!({
+                    "success": true,
+                    "export": {
+                        "id": exp.id,
+                        "topic": exp.topic,
+                        "path": exp.path,
+                        "name": exp.name,
+                        "type": exp.export_type,
+                        "description": exp.description,
+                        "signature": exp.signature
+                    }
+                })),
+                None => Ok(json!({ "success": false, "error": "Export not found" })),
+            }
         }
         "config_get" => {
             let config = crate::fs::config::load_config()?;
