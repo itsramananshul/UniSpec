@@ -286,37 +286,36 @@ tar -xvzf my-mode.tar.gz -C /path/to/project/.agent/modes/
 
 ```toml
 [mode]
-name = "unique-mode-name"
-display_name = "Human Readable Name"
+name = "simple"
+display_name = "Simple Mode"
+description = "Default mode with Spec-Driven Development workflows. Staging: specs being written. Working: specs being built. Build: shippable code."
 version = "1.0.0"
 
 [author]
-name = "Author Name"
-email = "author@example.com"
+name = "OpenSDD Team"
+contact = "https://github.com/osdd"
 
-[mode.description]
-short = "One line description"
-long = """
-Multi-line description.
-Can have paragraphs.
-"""
+[requirements]
+min_osdd_version = "0.9.0"
 
 [areas]
-default = ["Area1", "Area2", "Area3"]
-protected = ["Area1", "Area3"]  # Cannot be deleted
-required = ["Area1"]  # Cannot be removed from workflow
+default = ["Staging", "Working", "Build"]
+protected = ["Staging", "Working", "Build"]
+default_area = "Working"
 
 [capabilities]
-spec_writing = true     # Can create specs
-building = true        # Can build/code
-verification = true    # Can verify完成任务
-connectors = true      # Can run connectors
-custom_workflows = true  # Has custom workflows
-mcp_enabled = true     # Can use MCP
+spec_writing = true
+building = true
+verification = true
+connectors = true
+custom_workflows = false
 
-[settings]
-default_area = "Working"
-auto_index = true      # Auto-link code to specs
+[dependencies]
+extends = []
+
+[scripts]
+pre_activate = ""
+post_activate = ""
 ```
 
 ## Best Practices
