@@ -337,17 +337,37 @@ unispec topic list -a Working --hierarchy
 Display detailed information about a topic.
 
 ```bash
-unispec topic show <name>
+unispec topic show <name> [OPTIONS]
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `name` | Name of the topic to show |
 
+| Option | Description |
+|--------|-------------|
+| `-a, --all` | Show all files in the topic from all areas |
+| `-f, --from <area>` | Show files from a specific area (useful when topic has files from multiple areas) |
+
 **Example:**
 ```bash
+# Show current area's files (default area)
 unispec topic show "User Authentication"
+
+# Show files from a specific area
+unispec topic show "User Authentication" --from Staging
+
+# Show all files from all areas
+unispec topic show "User Authentication" --all
 ```
+
+**Multi-Area Topic Notes:**
+When a topic has been pushed between areas, it may contain files from multiple areas:
+- `specs.md` - copied from source area
+- `tasks_staging.md` - tasks from Staging area
+- `tasks_working.md` - tasks from Working area
+
+Use `--from` to view specific area's files, or `--all` to see everything.
 
 #### Push
 
@@ -364,16 +384,21 @@ unispec topic push <name> <area> [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `-s, --source <area>` | Source area (auto-detected if not specified) |
+| `--from <area>` | Source area (auto-detected from default area if not specified) |
 
 **Example:**
 ```bash
-# Push topic to Build area
+# Push topic to Build area (auto-detects source)
 unispec topic push "User Authentication" Build
 
 # Push from specific area
-unispec topic push "Feature X" Staging -s Working
+unispec topic push "User Authentication" Working --from Staging
 ```
+
+**Behavior:**
+- Copies source area files to target area (keeps original files)
+- Creates new target area files from target area's templates
+- This allows topics to have files from multiple areas visible via `topic show --all`
 
 #### Pull
 

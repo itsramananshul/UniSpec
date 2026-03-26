@@ -16,23 +16,34 @@ A mode is a complete workflow configuration containing:
 
 ```
 .agent/modes/<mode-name>/
-├── mode.toml          # Mode metadata
-├── skill.md          # Agent persona
-├── workflows/        # Workflow definitions
+├── mode.toml          # Mode metadata and configuration
+├── skill.md           # Agent persona
+├── workflows/         # Workflow definitions
 │   ├── feature:spec.md
 │   ├── feature:build.md
 │   └── feature:verify.md
-├── areas/            # Area templates
+├── areas/            # Area-specific templates (one per area)
 │   ├── staging/
+│   │   ├── specs.md     # Template for spec files in staging
+│   │   ├── tasks.md     # Template for task files in staging
+│   │   └── area.md      # Template for area description in staging
+│   ├── working/
+│   │   ├── specs.md
+│   │   ├── tasks.md
 │   │   └── area.md
-│   ├── building/
-│   │   └── area.md
-│   └── ship/
+│   └── build/
+│       ├── specs.md
+│       ├── tasks.md
 │       └── area.md
-└── templates/         # Topic templates
-    ├── spec.md
-    └── tasks.md
+└── templates/        # Global fallback templates (if area not found)
+    ├── specs.md
+    ├── tasks.md
+    └── area.md
 ```
+
+**Template lookup order:**
+1. First: `.agent/modes/<mode>/areas/<area>/<file>.md` (area-specific)
+2. Fallback: `.agent/modes/<mode>/templates/<file>.md` (global)
 
 ## Creating a Mode
 
@@ -73,7 +84,39 @@ building = true
 verification = true
 connectors = true
 custom_workflows = true
+
+[templates]
+# Global template file names (fallback if area-specific not set)
+spec_file = "specs.md"
+task_file = "tasks.md"
+area_file = "area.md"
+
+# Use area-specific templates if they exist, fallback to global templates
+use_area_templates = true
+
+# Per-area template file names (inline in [templates] section)
+# Output file names - these define what files are created in topics
+staging-spec-file = "specs_staging.md"
+staging-task-file = "tasks_staging.md"
+staging-area-file = "area_staging.md"
+
+working-spec-file = "specs_working.md"
+working-task-file = "tasks_working.md"
+working-area-file = "area_working.md"
 ```
+
+### Template Configuration
+
+The `[templates]` section controls:
+
+1. **Global template names** - Default file names for specs, tasks, and area files
+2. **use_area_templates** - Whether to use area-specific templates from `.agent/modes/<mode>/areas/<area>/`
+3. **Per-area file names** - Custom output file names per area (e.g., `tasks_staging.md` vs `tasks_working.md`)
+
+**How it works:**
+- Templates are read from `.agent/modes/<mode>/areas/<area>/specs.md`, `tasks.md`, `area.md`
+- Topics are created with output file names from `staging-spec-file`, `staging-task-file`, etc.
+- When pushing between areas, source files are kept and target area files are created from target templates
 
 ### 3. Create skill.md
 

@@ -55,8 +55,11 @@ impl AppState {
         if spec_dir.exists() {
             for entry in std::fs::read_dir(spec_dir)? {
                 let entry = entry?;
-                if entry.path().is_dir() && entry.path().join("area.md").exists() {
-                    areas.push(entry.file_name().to_string_lossy().to_string());
+                if entry.path().is_dir() {
+                    let area_filename = crate::agent::mode::get_area_filename();
+                    if entry.path().join(&area_filename).exists() {
+                        areas.push(entry.file_name().to_string_lossy().to_string());
+                    }
                 }
             }
         }
@@ -92,7 +95,7 @@ impl AppState {
             }
         }
 
-        let (total, completed, in_progress) = self.calculate_total_tasks(path, &children);
+        let (total, completed, in_progress) = self.calculate_total_tasks(path, &children, &area);
         let status = if total > 0 && completed == total {
             "complete".to_string()
         } else if in_progress > 0 || completed > 0 {
@@ -113,11 +116,16 @@ impl AppState {
         })
     }
 
-    fn calculate_total_tasks(&self, path: &Path, children: &[TopicNode]) -> (usize, usize, usize) {
-        let (mut total, mut completed, mut in_progress) = Self::count_tasks_in_dir(path);
+    fn calculate_total_tasks(
+        &self,
+        path: &Path,
+        children: &[TopicNode],
+        area: &str,
+    ) -> (usize, usize, usize) {
+        let (mut total, mut completed, mut in_progress) = Self::count_tasks_in_dir(path, area);
         for child in children {
             let (c_total, c_completed, c_in_progress) =
-                self.calculate_total_tasks(&child.path, &child.children);
+                self.calculate_total_tasks(&child.path, &child.children, area);
             total += c_total;
             completed += c_completed;
             in_progress += c_in_progress;
@@ -125,8 +133,9 @@ impl AppState {
         (total, completed, in_progress)
     }
 
-    fn count_tasks_in_dir(path: &Path) -> (usize, usize, usize) {
-        let tasks_path = path.join("tasks.md");
+    fn count_tasks_in_dir(path: &Path, area: &str) -> (usize, usize, usize) {
+        let task_filename = crate::agent::mode::get_task_filename_for_area(area);
+        let tasks_path = path.join(&task_filename);
         if !tasks_path.exists() {
             return (0, 0, 0);
         }

@@ -55,6 +55,14 @@ pub fn get_tools() -> Vec<Tool> {
                     "topic": {
                         "type": "string",
                         "description": "Name of the topic to show"
+                    },
+                    "show_all": {
+                        "type": "boolean",
+                        "description": "Show files from all areas"
+                    },
+                    "from": {
+                        "type": "string",
+                        "description": "Show files from a specific area"
                     }
                 },
                 "required": ["topic"]

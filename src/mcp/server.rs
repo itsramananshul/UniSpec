@@ -24,7 +24,12 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
         }
         "topics_show" => {
             let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
-            crate::commands::topic::run_show(topic)?;
+            let show_all = args
+                .get("show_all")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let from_area = args.get("from").and_then(|v| v.as_str());
+            crate::commands::topic::run_show(topic, show_all, from_area)?;
             Ok(json!({ "success": true }))
         }
         "topics_delete" => {

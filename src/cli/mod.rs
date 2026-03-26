@@ -334,6 +334,9 @@ pub enum TopicCommands {
         topic: String,
         /// Target area to push to
         area: String,
+        /// Source area to push from
+        #[arg(long)]
+        from: Option<String>,
     },
     /// Pull a topic from another area
     Pull {
@@ -354,6 +357,12 @@ pub enum TopicCommands {
     Show {
         /// Name of the topic to show
         topic: String,
+        /// Show all files in the topic (not just current area's files)
+        #[arg(short, long)]
+        all: bool,
+        /// Show files from a specific area (useful when topic has files from multiple areas)
+        #[arg(short, long)]
+        from: Option<String>,
     },
     /// Show progress across all topics
     Progress {

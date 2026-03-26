@@ -102,6 +102,33 @@ pub fn current_mode_templates_dir() -> Option<PathBuf> {
     None
 }
 
+/// Get the templates directory for a specific area in the current mode
+pub fn current_mode_area_templates_dir(area: &str) -> Option<PathBuf> {
+    let mode_name = crate::agent::current_mode().ok()?;
+    let agent_dir = agent_dir();
+
+    // Check local mode areas first: .agent/modes/<mode>/areas/<area>/
+    let local_areas = agent_dir
+        .join("modes")
+        .join(&mode_name)
+        .join("areas")
+        .join(area.to_lowercase());
+    if local_areas.exists() {
+        return Some(local_areas);
+    }
+
+    // Check global mode areas: ~/.config/unispec/modes/<mode>/areas/<area>/
+    let global_areas = global_modes_dir()
+        .join(&mode_name)
+        .join("areas")
+        .join(area.to_lowercase());
+    if global_areas.exists() {
+        return Some(global_areas);
+    }
+
+    None
+}
+
 pub fn read_template(name: &str) -> Option<String> {
     if let Some(templates_dir) = current_mode_templates_dir() {
         let path = templates_dir.join(name);
@@ -117,6 +144,21 @@ pub fn read_template(name: &str) -> Option<String> {
     }
 
     None
+}
+
+/// Read a template from the current mode's area-specific templates
+/// Fallback to global templates if area-specific doesn't exist
+pub fn read_area_template(area: &str, name: &str) -> Option<String> {
+    // First try area-specific templates
+    if let Some(areas_dir) = current_mode_area_templates_dir(area) {
+        let path = areas_dir.join(name);
+        if path.exists() {
+            return fs::read_to_string(&path).ok();
+        }
+    }
+
+    // Fallback to global mode templates
+    read_template(name)
 }
 
 pub fn ensure_dir(path: &Path) -> Result<()> {

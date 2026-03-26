@@ -23,9 +23,9 @@ UniSpec provides **33 built-in MCP tools** plus dynamic tools for each connector
 |----------|-------------|----------------|
 | `topics_list` | List all topics in an area | `unispec topic list` |
 | `topics_add` | Create a new topic | `unispec topic add` |
-| `topics_show` | Show details of a topic | `unispec topic show` |
+| `topics_show` | Show details of a topic (supports `--from` and `--all`) | `unispec topic show` |
 | `topics_delete` | Delete a topic | `unispec topic remove` |
-| `topics_push` | Move a topic to another area | `unispec topic push` |
+| `topics_push` | Move a topic to another area (supports `--from`) | `unispec topic push` |
 | `topics_pull` | Pull a topic from another area | `unispec topic pull` |
 | `topics_progress` | Show progress across topics | `unispec topic progress` |
 
@@ -119,6 +119,8 @@ Once your AI is connected, you can use natural language:
 "List all topics in Staging"
 "Create a new topic called 'Payment API' in Working"
 "Show me the details for the User Login topic"
+"Show the User Login topic from the Staging area"
+"Show all files for User Login across all areas"
 "Push 'Payment API' to Build"
 
 # Areas
@@ -139,6 +141,44 @@ Once your AI is connected, you can use natural language:
 "Run the test connector"
 "Run lint with extra arguments"
 ```
+
+### MCP Tool Parameters
+
+The `topics_show` tool supports additional parameters for multi-area topics:
+
+```json
+{
+  "topics_show": {
+    "topic": "user-auth",
+    "show_all": false,
+    "from": "Staging"
+  }
+}
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `topic` | string | Name of the topic to show (required) |
+| `show_all` | boolean | Show files from all areas (default: false) |
+| `from` | string | Show files from a specific area (e.g., "Staging", "Working") |
+
+The `topics_push` tool supports the `--from` parameter:
+
+```json
+{
+  "topics_push": {
+    "topic": "user-auth",
+    "area": "Working",
+    "source_area": "Staging"
+  }
+}
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `topic` | string | Name of the topic to push (required) |
+| `area` | string | Target area to push to (required) |
+| `source_area` | string | Source area (optional, auto-detected if not provided) |
 
 ## Connector MCP Tools
 

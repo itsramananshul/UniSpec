@@ -23,9 +23,11 @@ pub struct ModeConfig {
     pub dependencies: Dependencies,
     #[serde(default)]
     pub scripts: Scripts,
+    #[serde(default)]
+    pub templates: TemplatesConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModeMeta {
     pub name: String,
     pub display_name: String,
@@ -77,7 +79,41 @@ pub struct Capabilities {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Dependencies {
     #[serde(default)]
-    pub extends: Vec<String>,
+    pub modes: Vec<String>,
+    #[serde(default)]
+    pub connectors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TemplatesConfig {
+    #[serde(default = "default_spec_file")]
+    pub spec_file: String,
+    #[serde(default = "default_task_file")]
+    pub task_file: String,
+    #[serde(default = "default_area_file")]
+    pub area_file: String,
+    #[serde(default)]
+    pub use_area_templates: bool,
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, String>,
+}
+
+impl TemplatesConfig {
+    pub fn get_override(&self, key: &str) -> Option<String> {
+        self.extra.get(key).cloned()
+    }
+}
+
+fn default_spec_file() -> String {
+    "specs.md".to_string()
+}
+
+fn default_task_file() -> String {
+    "tasks.md".to_string()
+}
+
+fn default_area_file() -> String {
+    "area.md".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -192,19 +228,70 @@ pub fn get_mode_info(name: &str) -> Result<ModeConfig> {
 }
 
 pub fn get_mode_path(name: &str) -> Result<PathBuf> {
-    // Check local modes first
-    let local_path = agent_dir().join("modes").join(name);
-    if local_path.join("mode.toml").exists() {
-        return Ok(local_path);
-    }
-
-    // Check global modes
-    let global_path = global_modes_dir().join(name);
-    if global_path.join("mode.toml").exists() {
-        return Ok(global_path);
-    }
-
     Err(anyhow::anyhow!("Mode '{}' not found", name))
+}
+
+/// Get the spec file name from current mode's config
+pub fn get_spec_filename() -> String {
+    get_spec_filename_for_area("Working")
+}
+
+/// Get the spec file name for a specific area
+pub fn get_spec_filename_for_area(area: &str) -> String {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            let extra = &config.templates.extra;
+            let area_lower = area.to_lowercase();
+            let spec_key = format!("{}-spec-file", area_lower);
+            if let Some(f) = extra.get(&spec_key) {
+                return f.clone();
+            }
+            return config.templates.spec_file;
+        }
+    }
+    "specs.md".to_string()
+}
+
+/// Get the task file name from current mode's config
+pub fn get_task_filename() -> String {
+    get_task_filename_for_area("Working")
+}
+
+/// Get the task file name for a specific area
+pub fn get_task_filename_for_area(area: &str) -> String {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            let extra = &config.templates.extra;
+            let area_lower = area.to_lowercase();
+            let task_key = format!("{}-task-file", area_lower);
+            if let Some(f) = extra.get(&task_key) {
+                return f.clone();
+            }
+            return config.templates.task_file;
+        }
+    }
+    "tasks.md".to_string()
+}
+
+/// Get the area file name from current mode's config
+pub fn get_area_filename() -> String {
+    get_area_filename_for_area("Working")
+}
+
+/// Get the area file name for a specific area
+pub fn get_area_filename_for_area(area: &str) -> String {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            let extra = &config.templates.extra;
+            let area_lower = area.to_lowercase();
+            let area_key = format!("{}-area-file", area_lower);
+            if let Some(f) = extra.get(&area_key) {
+                return f.clone();
+            }
+            return config.templates.area_file;
+        }
+    }
+    "area.md".to_string()
 }
 
 pub fn run_activate(mode_name: &str) -> Result<String> {

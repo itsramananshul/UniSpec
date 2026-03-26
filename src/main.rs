@@ -188,8 +188,8 @@ fn main() -> Result<()> {
                 }
             }
             TopicCommands::List { area, hierarchy: _ } => topic::run_list(&area, false)?,
-            TopicCommands::Push { topic, area } => {
-                topic::run_push(&topic, &area, None)?;
+            TopicCommands::Push { topic, area, from } => {
+                topic::run_push(&topic, &area, from.as_deref())?;
                 if get_show_platypus() {
                     platypus::working();
                 }
@@ -210,7 +210,9 @@ fn main() -> Result<()> {
                     platypus::sad();
                 }
             }
-            TopicCommands::Show { topic } => topic::run_show(&topic)?,
+            TopicCommands::Show { topic, all, from } => {
+                topic::run_show(&topic, all, from.as_deref())?
+            }
             TopicCommands::Progress { area } => topic::run_progress(area.as_deref())?,
         },
         Some(Commands::Index(index_cmd)) => match index_cmd {
