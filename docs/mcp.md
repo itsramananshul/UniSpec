@@ -15,7 +15,7 @@ MCP is a protocol that lets AI tools interact with your project. Instead of just
 
 ## Available MCP Tools
 
-UniSpec provides **26 built-in MCP tools** plus dynamic tools for each connector you define:
+UniSpec provides **33 built-in MCP tools** plus dynamic tools for each connector you define:
 
 ### Topic Management (7 tools)
 
@@ -40,12 +40,46 @@ UniSpec provides **26 built-in MCP tools** plus dynamic tools for each connector
 | `areas_default` | Set the default area | `unispec area default` |
 | `areas_health` | Show area health statistics | `unispec area health` |
 
-### Index/Link Management (5 tools)
+### Index/Link Management (14 tools)
 
 | MCP Tool | Description | CLI Equivalent |
 |----------|-------------|----------------|
 | `index_list` | List all index links (optional filters) | `unispec index list` |
 | `index_add` | Add a link between topic and path | `unispec index add` |
+| `index_remove` | Remove a link between topic and path | `unispec index remove` |
+| `index_find` | Find links by topic, path, tag, or annotation | `unispec index find` |
+| `index_cleanup` | Remove links to non-existent topics/paths | `unispec index cleanup` |
+| `index_tags` | List all unique tags in the index | `unispec index tags` |
+| `index_graph` | Export index as graph JSON for visualization | `unispec index graph` |
+| `index_backlinks` | Generate backlinks markdown for a topic | `unispec index backlinks` |
+| `index_exports` | List exports (functions, classes) for a topic | `unispec index exports` |
+| `index_query` | Query exports by name, type, description, or ID | `unispec index query` |
+| `index_depends` | Find what topics depend on a given topic | `unispec index depends` |
+| `index_lookup` | Find export by full ID (e.g., user-login:login_user) | `unispec index lookup` |
+
+### Configuration (2 tools)
+
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `config_get` | Get the current configuration | `unispec set` |
+| `config_set` | Set the default area | `unispec set area` |
+
+### Mode Management (4 tools)
+
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `mode_list` | List all available agent modes | `unispec mode list` |
+| `mode_info` | Get detailed info about a mode | `unispec mode info` |
+| `mode_activate` | Activate an agent mode | `unispec mode activate` |
+| `mode_current` | Get the current active mode | `unispec mode current` |
+
+### Connector (1 tool + dynamic)
+
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `connector_list` | List all available connectors | `unispec connector list` |
+| `connector_run` | Run a connector command | `unispec connector run` |
+| `unispec_<name>` | Dynamic tool for each connector | `unispec connector run <name>` |
 | `index_remove` | Remove a link | `unispec index remove` |
 | `index_find` | Find links by topic or path | `unispec index find` |
 | `index_cleanup` | Remove orphaned links | `unispec index cleanup` |
