@@ -13,11 +13,11 @@ use clap::Parser;
 
 use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
-    AreaCommands, ConnectorCommands, IndexCommands, ModeCommands, PattyCommands, PkgCommands,
-    TopicCommands,
+    AreaCommands, ConnectorCommands, IndexCommands, IngestCommands, ModeCommands, PattyCommands,
+    PkgCommands, TopicCommands,
 };
 use crate::cli::{Cli, Commands};
-use crate::commands::{area, index, init, init_editor, repo, set, topic};
+use crate::commands::{area, index, ingest, init, init_editor, repo, set, topic};
 
 fn get_show_platypus() -> bool {
     crate::fs::config::get_paddy_enabled().unwrap_or(true)
@@ -441,6 +441,27 @@ fn main() -> Result<()> {
             }
             PkgCommands::Installed { global } => {
                 repo::list_installed(global)?;
+            }
+        },
+        Some(Commands::Ingest(ingest_cmd)) => match ingest_cmd {
+            IngestCommands::Run {
+                path,
+                area,
+                topic,
+                languages,
+                watch,
+            } => {
+                ingest::run_ingest(&path, &area, topic.as_deref(), languages.as_deref(), watch)?;
+                if get_show_platypus() {
+                    platypus::happy();
+                }
+            }
+            IngestCommands::Watch { path, topic } => {
+                println!("🔄 Starting file watcher...");
+                println!("   (Live auto-indexing coming soon)");
+            }
+            IngestCommands::Stop => {
+                println!("🛑 Stopping file watcher...");
             }
         },
         Some(Commands::Patty(paddy_cmd)) => match paddy_cmd {

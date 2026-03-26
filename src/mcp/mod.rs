@@ -495,6 +495,38 @@ pub fn get_tools() -> Vec<Tool> {
                 "required": ["name"]
             }),
         },
+        Tool {
+            name: "code_analysis".to_string(),
+            description: "Query code analysis data from ingested topics - get functions, structs, enums by topic/module name".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic name to query (root topic from ingest)"
+                    },
+                    "area": {
+                        "type": "string",
+                        "description": "Area containing the topic",
+                        "default": "Ingested"
+                    },
+                    "module": {
+                        "type": "string",
+                        "description": "Optional module/subtopic to filter to"
+                    },
+                    "item_type": {
+                        "type": "string",
+                        "description": "Filter by type: functions, structs, enums (default: all)",
+                        "default": "all"
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Optional search pattern to filter results"
+                    }
+                },
+                "required": ["topic"]
+            }),
+        },
     ];
 
     // Add dynamic connector tools

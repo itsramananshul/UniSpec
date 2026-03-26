@@ -23,6 +23,18 @@ crossterm = "0.27"
 tokio = { version = "1.0", features = ["full"] }
 open = "5"
 dirs = "5"
+walkdir = "2.4"
+regex = "1.10"
+itertools = "0.12"
+
+# Tree-sitter for code parsing
+tree-sitter = "0.24"
+tree-sitter-rust = "0.23"
+tree-sitter-javascript = "0.23"
+tree-sitter-typescript = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-go = "0.23"
+tree-sitter-bash = "0.23"
 
 [dev-dependencies]
 tempfile = "3.10"

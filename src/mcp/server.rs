@@ -300,6 +300,24 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let output = crate::agent::connector::run_run(name, &extra_args)?;
             Ok(json!({ "success": true, "output": output }))
         }
+        "code_analysis" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Ingested");
+            let module = args.get("module").and_then(|v| v.as_str());
+            let item_type = args
+                .get("item_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("all");
+            let pattern = args.get("pattern").and_then(|v| v.as_str());
+
+            let result = crate::agent::code_parser::query_code_analysis(
+                topic, area, module, item_type, pattern,
+            )?;
+            Ok(json!({ "success": true, "data": result }))
+        }
         name => {
             // Check if it's a dynamic connector tool
             if name.starts_with("unispec_") {

@@ -190,6 +190,9 @@ pub enum Commands {
     /// Manage packages (list, install, remove)
     #[command(subcommand)]
     Pkg(PkgCommands),
+    /// Ingest a codebase and create specs from it
+    #[command(subcommand)]
+    Ingest(IngestCommands),
     /// Control platypus mascot display
     #[command(subcommand)]
     Patty(PattyCommands),
@@ -506,20 +509,20 @@ pub enum PkgCommands {
         #[arg(short, long)]
         repo: Option<String>,
     },
-    /// Install a package
+    /// Install a package (mode, connectors, workflows)
     Install {
         /// Package name or GitHub URL
         package: String,
-        /// Install globally (system-wide)
+        /// Install globally (user-wide)
         #[arg(short, long)]
         global: bool,
-        /// Repository URL (default: official UniSpec repo)
+        /// Repository URL
         #[arg(short, long)]
         repo: Option<String>,
     },
     /// Remove an installed package
     Remove {
-        /// Package name to remove
+        /// Package name
         package: String,
         /// Remove from global installation
         #[arg(short, long)]
@@ -531,4 +534,36 @@ pub enum PkgCommands {
         #[arg(short, long)]
         global: bool,
     },
+}
+
+#[derive(Subcommand)]
+pub enum IngestCommands {
+    /// Ingest a codebase directory and create specs from it
+    Run {
+        /// Path to the codebase to ingest
+        path: String,
+        /// Target area to create specs in
+        #[arg(short, long, default_value = "Ingested")]
+        area: String,
+        /// Topic name for the ingested code
+        #[arg(short, long)]
+        topic: Option<String>,
+        /// Languages to parse (default: all supported)
+        #[arg(short, long)]
+        languages: Option<String>,
+        /// Watch for file changes and re-ingest automatically
+        #[arg(short, long)]
+        watch: bool,
+    },
+    /// Start live file watching for auto-indexing
+    Watch {
+        /// Path to watch (default: current directory)
+        #[arg(short, long)]
+        path: Option<String>,
+        /// Topic to link code to
+        #[arg(short, long)]
+        topic: Option<String>,
+    },
+    /// Stop watching
+    Stop,
 }

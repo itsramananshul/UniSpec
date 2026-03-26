@@ -1069,6 +1069,76 @@ unispec pkg installed --global
 
 ---
 
+## Ingest
+
+Ingest an existing codebase and create specs from it. Uses tree-sitter to parse source code and extract functions, structs, enums, imports, and documentation.
+
+```bash
+unispec ingest <subcommand>
+```
+
+### Subcommands
+
+#### Run
+
+Ingest a codebase directory and create specs from it.
+
+```bash
+unispec ingest run <path> [OPTIONS]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `path` | Path to the codebase to ingest |
+
+| Option | Description |
+|--------|-------------|
+| `-a, --area <area>` | Target area to create specs in (default: Ingested) |
+| `-t, --topic <name>` | Topic name for the ingested code (default: directory name) |
+| `-l, --languages <langs>` | Languages to parse (comma-separated: rust,python,js) |
+| `-w, --watch` | Watch for file changes and re-ingest automatically |
+
+**Example:**
+```bash
+# Ingest current project
+unispec ingest run .
+
+# Ingest specific directory into custom area
+unispec ingest run /path/to/project -a "Backend"
+
+# Ingest specific languages only
+unispec ingest run src --languages rust,go
+```
+
+**Output:**
+Creates a topic with:
+- `specs.md` - Overview with statistics, modules, structs, enums
+- `links.md` - Dependencies and imports for each file
+- `functions.md` - All functions with signatures and line numbers
+
+#### Watch
+
+Start live file watching for auto-indexing (coming soon).
+
+```bash
+unispec ingest watch [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-p, --path <path>` | Path to watch (default: current directory) |
+| `-t, --topic <name>` | Topic to link code to |
+
+#### Stop
+
+Stop the file watcher.
+
+```bash
+unispec ingest stop
+```
+
+---
+
 ## Patty
 
 Control the platypus mascot ("Paddy") display in the TUI.

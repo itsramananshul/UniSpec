@@ -1,6 +1,7 @@
 // src/commands/mod.rs
 pub mod area;
 pub mod index;
+pub mod ingest;
 pub mod init;
 pub mod init_editor;
 pub mod pull;
