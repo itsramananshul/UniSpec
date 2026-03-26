@@ -62,8 +62,7 @@ unispec init
 # Launch TUI
 unispec
 ```
-
-<img src="pladdy.jpg" width="450" alt="Paddy the Platypus">
+<img src="IDE.jpg" width="1200" alt="Paddy the Platypus">
 
 ---
 
@@ -101,25 +100,25 @@ Custom workflows for different teams:
 You can install custom nodes from the community, [Here](https://github.com/uwzis/UniSpec-Modes) for more details.
 ```bash
 # List available packages
-unispec repo list
+unispec pkg list
 
 # Install a package to current project
-unispec repo install default-modes
+unispec pkg install default-modes
 
 # Install globally (system-wide)
-unispec repo install default-modes --global
+unispec pkg install default-modes --global
 
 # Install from a GitHub URL directly
-unispec repo install https://github.com/username/unispec-modes
+unispec pkg install https://github.com/username/unispec-modes
 
 # List installed packages
-unispec repo installed
+unispec pkg installed
 
 # List globally installed packages
-unispec repo installed --global
+unispec pkg installed --global
 
 # Remove a package
-unispec repo remove sprint-mode
+unispec pkg remove sprint-mode
 ```
 
 ---
@@ -187,5 +186,7 @@ He believes in you. 🦫
 ---
 
 **Remember**: Code is what computers run. Specs are what humans understand. Write the spec first, work based off understanding.
+
+<img src="tui.jpg" width="450" alt="Paddy the Platypus">
 
 — Paddy the Platypus 🦫

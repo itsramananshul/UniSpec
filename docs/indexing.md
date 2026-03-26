@@ -253,4 +253,10 @@ unispec index add --topic "payment-api" --path src/payment/stripe.rs
 
 ---
 
+## See Also
+
+- [Commands Reference](commands.md) - CLI command documentation
+- [Configuration Reference](config.md) - Config files, environment variables
+- [MCP Documentation](mcp.md) - How AI uses indexing
+
 *See commands.md for all CLI commands, or mcp.md for how AI uses indexing.*

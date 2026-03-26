@@ -224,6 +224,7 @@ This creates workflow files in your editor's config folder. Now Claude/Cursor/Wi
 ## What's Next?
 
 - [Commands Reference](commands.md) - Full CLI docs
+- [Configuration Reference](config.md) - Config files, environment variables
 - [Creating Modes](modes.md) - Build custom workflows
 - [MCP Integration](mcp.md) - Connect AI agents
 - [Indexing](indexing.md) - Link code to specs

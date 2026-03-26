@@ -13,7 +13,7 @@ use clap::Parser;
 
 use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
-    AreaCommands, ConnectorCommands, IndexCommands, ModeCommands, PattyCommands, RepoCommands,
+    AreaCommands, ConnectorCommands, IndexCommands, ModeCommands, PattyCommands, PkgCommands,
     TopicCommands,
 };
 use crate::cli::{Cli, Commands};
@@ -392,14 +392,14 @@ fn main() -> Result<()> {
                 println!("{}", config);
             }
         },
-        Some(Commands::Repo(repo_cmd)) => match repo_cmd {
-            RepoCommands::List { repo } => {
+        Some(Commands::Pkg(pkg_cmd)) => match pkg_cmd {
+            PkgCommands::List { repo } => {
                 repo::list_packages(repo.as_deref())?;
             }
-            RepoCommands::Search { query, repo } => {
+            PkgCommands::Search { query, repo } => {
                 repo::search_packages(&query, repo.as_deref())?;
             }
-            RepoCommands::Install {
+            PkgCommands::Install {
                 package,
                 global,
                 repo,
@@ -410,10 +410,10 @@ fn main() -> Result<()> {
                     repo::install_package(&package, global, repo.as_deref())?;
                 }
             }
-            RepoCommands::Remove { package, global } => {
+            PkgCommands::Remove { package, global } => {
                 repo::remove_package(&package, global)?;
             }
-            RepoCommands::Installed { global } => {
+            PkgCommands::Installed { global } => {
                 repo::list_installed(global)?;
             }
         },

@@ -181,6 +181,66 @@ unispec mode activate sprint
 unispec mode current
 ```
 
+## Installing Modes
+
+### Local Modes
+
+Modes in your project's `.agent/modes/` directory are available only to that project.
+
+```bash
+# Add a local mode (project-specific)
+unispec mode add ./modes/my-custom-mode
+```
+
+### Global Modes
+
+Modes in your user config directory are available across all projects.
+
+```bash
+# Add a mode globally (available to all projects)
+unispec mode add /path/to/mymode --global
+
+# Remove a global mode
+unispec mode remove mymode --global
+```
+
+Global modes are stored in `~/.config/unispec/.agent/modes/` and searched when:
+- Listing modes (`unispec mode list`)
+- Activating a mode (`unispec mode activate`)
+- Running the MCP server
+
+### Mode Search Order
+
+Modes are searched in this order:
+1. Local: `./.agent/modes/`
+2. Global: `~/.config/unispec/.agent/modes/`
+3. System: `/usr/share/unispec/.agent/modes/`
+
+The first match wins.
+
+## Installing Modes from Repository
+
+You can install pre-built modes from the community package repository:
+
+```bash
+# List available packages
+unispec pkg list
+
+# Search for modes
+unispec pkg search sprint
+
+# Install a mode package
+unispec pkg install sprint-mode
+
+# Install globally (available to all projects)
+unispec pkg install sprint-mode --global
+
+# List installed packages
+unispec pkg installed
+```
+
+Packages can include modes, connectors, and workflows. See [Commands Reference](commands.md#pkg) for full details.
+
 ## Mode Types
 
 ### Simple Mode (Default)
@@ -267,5 +327,12 @@ auto_index = true      # Auto-link code to specs
 4. **Iterate** - Modes evolve with your team
 
 ---
+
+## See Also
+
+- [Commands Reference](commands.md) - CLI command documentation
+- [Configuration Reference](config.md) - Config files, environment variables
+- [MCP Documentation](mcp.md) - AI agent integration
+- [Getting Started](getting-started.md) - Quick start guide
 
 *Need help? Check commands.md for CLI usage or mcp.md to connect AI agents to your mode.*
