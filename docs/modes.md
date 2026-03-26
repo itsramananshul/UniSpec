@@ -331,7 +331,7 @@ auto_index = true      # Auto-link code to specs
 ## See Also
 
 - [Commands Reference](commands.md) - CLI command documentation
-- [Configuration Reference](config.md) - Config files, environment variables
+- [Configuration Reference](configuration.md) - Config files, environment variables
 - [MCP Documentation](mcp.md) - AI agent integration
 - [Getting Started](getting-started.md) - Quick start guide
 

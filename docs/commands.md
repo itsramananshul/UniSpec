@@ -902,7 +902,7 @@ unispec connector mcp
 
 ### Connector Configuration Format
 
-Connectors are stored in `.agent/config.toml`. See [Configuration Reference](config.md) for the complete format.
+Connectors are stored in `.agent/config.toml`. See [Configuration Reference](configuration.md) for the complete format.
 
 ```toml
 [[connector]]
@@ -915,7 +915,7 @@ working_dir = "/project/root"
 timeout = 120
 ```
 
-See [Configuration Reference](config.md#connector-configuration) for all connector options.
+See [Configuration Reference](configuration.md#connector-configuration) for all connector options.
 
 ---
 
@@ -1096,7 +1096,7 @@ The platypus mascot displays different expressions based on context:
 
 ## See Also
 
-- [Configuration Reference](config.md) - Config files, environment variables, exit codes
+- [Configuration Reference](configuration.md) - Config files, environment variables, exit codes
 - [Modes Documentation](modes.md) - Custom workflow configurations
 - [MCP Documentation](mcp.md) - AI agent integration
 - [Getting Started](getting-started.md) - Quick start guide
