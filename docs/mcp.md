@@ -11,95 +11,99 @@ MCP is a protocol that lets AI tools interact with your project. Instead of just
 - Run your connectors
 - Query your progress
 - Understand your project structure
+- Add your own commands & scripts
 
-## Supported Editors
+## Available MCP Tools
 
-UniSpec integrates with 24 editors:
+UniSpec provides **26 built-in MCP tools** plus dynamic tools for each connector you define:
 
-| Editor | CLI Flag | Config Location |
-|--------|----------|-----------------|
-| Amazon Q Developer | `--amazon-q` | `.amazonq/prompts` |
-| Antigravity | `--antigravity` | `.agent/workflows` |
-| Augment CLI | `--auggie` | `.augment/commands` |
-| Claude Code | `--claude-code` | `.claude/commands/unispec` |
-| Cline | `--cline` | `.clinerules/workflows` |
-| Codex | `--codex` | `~/.codex/prompts` |
-| CodeBuddy | `--codebuddy` | `.codebuddy/commands/unispec` |
-| Continue | `--continue` | `.continue/prompts` |
-| CoStrict | `--costrict` | `.cospec/unispec/commands` |
-| Crush | `--crush` | `.crush/commands/unispec` |
-| Cursor | `--cursor` | `.cursor/commands` |
-| Factory Droid | `--factory` | `.factory/commands` |
-| Gemini CLI | `--gemini-cli` | `.gemini/commands/unispec` |
-| GitHub | `--github` | `.github/prompts` |
-| iFlow | `--iflow` | `.iflow/commands` |
-| Kilo Code | `--kilo-code` | `.kilocode/workflows` |
-| Kiro | `--kiro` | `.kiro/prompts` |
-| OpenCode | `--opencode` | `.opencode/command` |
-| Pi | `--pi` | `.pi/prompts` |
-| Qoder | `--qoder` | `.qoder/commands/unispec` |
-| Qwen Code | `--qwen-code` | `.qwen/commands` |
-| RooCode | `--roo-code` | `.roo/commands` |
-| Windsurf | `--windsurf` | `.windsurf/workflows` |
-| TRAE | `--trae` | `.trae/rule` |
+### Topic Management (7 tools)
 
-## Quick Setup
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `topics_list` | List all topics in an area | `unispec topic list` |
+| `topics_add` | Create a new topic | `unispec topic add` |
+| `topics_show` | Show details of a topic | `unispec topic show` |
+| `topics_delete` | Delete a topic | `unispec topic remove` |
+| `topics_push` | Move a topic to another area | `unispec topic push` |
+| `topics_pull` | Pull a topic from another area | `unispec topic pull` |
+| `topics_progress` | Show progress across topics | `unispec topic progress` |
 
-### Init with Editors
+### Area Management (6 tools)
 
-```bash
-# Initialize with specific editors
-unispec init --cursor --cline
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `areas_list` | List all areas | `unispec area list` |
+| `areas_add` | Add a new area | `unispec area add` |
+| `areas_remove` | Remove an area | `unispec area remove` |
+| `areas_rename` | Rename an area | `unispec area rename` |
+| `areas_default` | Set the default area | `unispec area default` |
+| `areas_health` | Show area health statistics | `unispec area health` |
 
-# Or all of them
-unispec init --all
-```
+### Index/Link Management (5 tools)
 
-This creates the necessary workflow files in each editor's config folder.
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `index_list` | List all index links (optional filters) | `unispec index list` |
+| `index_add` | Add a link between topic and path | `unispec index add` |
+| `index_remove` | Remove a link | `unispec index remove` |
+| `index_find` | Find links by topic or path | `unispec index find` |
+| `index_cleanup` | Remove orphaned links | `unispec index cleanup` |
 
-### Manual Setup
+### Mode Management (4 tools)
 
-```bash
-# For each editor you want to use
-unispec init --cursor
-unispec init --windsurf
-unispec init --claude-code
-```
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `mode_list` | List all available modes | `unispec mode list` |
+| `mode_info` | Get detailed info about a mode | `unispec mode info` |
+| `mode_activate` | Activate an agent mode | `unispec mode activate` |
+| `mode_current` | Get the current active mode | `unispec mode current` |
 
-## Using MCP Tools
+### Connector Tools (2 + dynamic)
 
-Once configured, your AI editor has access to these tools:
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `connector_list` | List all available connectors | `unispec connector list` |
+| `connector_run` | Run a connector command | `unispec connector run` |
+| `unispec_<name>` | Dynamic tool per connector | Custom commands |
 
-### Read Specs
+### Configuration (2 tools)
 
-```
-Read the spec for "User Login"
-What's the current status of the API project?
-Show me the acceptance criteria for the payment feature
-```
+| MCP Tool | Description | CLI Equivalent |
+|----------|-------------|----------------|
+| `config_get` | Get current configuration | Internal |
+| `config_set` | Set the default area | `unispec set` |
 
-### Manage Topics
+---
 
-```
-Create a new topic called "API Redesign" in Staging
-Push "User Login" to Building
-Show all topics in the Ship area
-```
+### Using MCP Tools in Conversation
 
-### Run Connectors
+Once your AI is connected, you can use natural language:
 
 ```
-Run the tests for the current topic
-Run lint on the codebase
-Run the build connector
-```
+# Topics
+"List all topics in Staging"
+"Create a new topic called 'Payment API' in Working"
+"Show me the details for the User Login topic"
+"Push 'Payment API' to Build"
 
-### Query Index
+# Areas
+"What areas do we have?"
+"Add a new area called 'Review'"
+"What's the health of each area?"
 
-```
-What files are linked to the authentication topic?
-Find all references to the user profile spec
-Show me the code related to payment processing
+# Index
+"What files are linked to the authentication topic?"
+"Link src/auth/login.rs to the User Login topic"
+"Find all files linked to the payment topic"
+
+# Modes
+"Switch to sprint mode"
+"What modes are available?"
+
+# Connectors
+"Run the test connector"
+"Run lint with extra arguments"
 ```
 
 ## Connector MCP Tools
@@ -135,6 +139,27 @@ args = ["tests/", "-v"]
 timeout = 60
 ```
 
+### Connector Dynamic Tools
+
+Each connector automatically becomes an MCP tool named `unispec_<name>`:
+
+```json
+{
+  "name": "unispec_test",
+  "description": "Run test suite",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "args": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Additional arguments to pass to the command"
+      }
+    }
+  }
+}
+```
+
 ### Running Connectors
 
 ```bash
@@ -150,14 +175,6 @@ unispec connector list
 # Generate MCP config for connectors
 unispec connector mcp
 ```
-
-### Using Connectors in IDE
-
-When you run `unispec init --cursor --cline --windsurf`, connectors are included in the workflow files. Your AI can then run them directly from chat:
-
-- "Run the test connector" → Executes `pytest tests/ -v`
-- "Run lint and fix errors" → Executes `ruff check .` then applies fixes
-- "Build the project" → Executes `cargo build`
 
 ### Per-Project Connectors
 
@@ -175,6 +192,23 @@ unispec connector new typecheck "Type check project" "mypy" "src/"
 ```
 
 These are stored in `./.agent/config.toml` and available to your AI editor.
+
+## Commands Not Available via MCP
+
+Some CLI commands are not exposed as MCP tools because they're used for project setup or configuration rather than runtime operations:
+
+| CLI Command | Reason not in MCP |
+|-------------|-------------------|
+| `unispec init` | One-time project initialization |
+| `unispec mode add` | Mode addition (manual config) |
+| `unispec mode remove` | Mode removal (manual config) |
+| `unispec connector new` | Connector creation (config-based) |
+| `unispec connector delete` | Connector deletion (config-based) |
+| `unispec connector edit` | Connector editing (config-based) |
+| `unispec pkg list/search/install/remove` | Package management (use CLI) |
+| `unispec patty enable/disable/status` | Mascot control (use CLI) |
+| `unispec index full` | Index statistics |
+| `unispec index watch` | Background watcher |
 
 ## MCP Server
 
@@ -195,26 +229,11 @@ Add to `~/.config/claude/settings.json`:
   "mcpServers": {
     "unispec": {
       "command": "unispec",
-      "args": ["mcp"]
+      "args": ["mcp", "./"]
     }
   }
 }
 ```
-
-### Available MCP Tools
-
-When connected, these tools are available:
-
-| Tool | Description |
-|------|-------------|
-| `list_topics` | List all topics, optionally by area |
-| `get_topic` | Get details of a specific topic |
-| `get_spec` | Read a topic's spec.md |
-| `get_tasks` | Read a topic's tasks.md |
-| `list_areas` | List all areas |
-| `run_connector` | Execute a connector |
-| `query_index` | Find files linked to topics |
-| `get_progress` | Show progress across areas |
 
 ## Workflow Files
 
@@ -343,31 +362,6 @@ If your tool supports MCP, add UniSpec:
 |----------|-------------|
 | `UNISPEC_ROOT` | Project root (default: current dir) |
 | `UNISPEC_MODE` | Mode to use |
-
-## Troubleshooting
-
-### "Editor not found"
-
-Some editors aren't in standard locations. Check:
-```bash
-# Find editor config
-echo $HOME
-ls -la $HOME/.cursor/  # or similar
-```
-
-### "Workflows not showing up"
-
-Make sure you ran the init for that specific editor:
-```bash
-unispec init --cursor
-```
-
-### "MCP server won't start"
-
-Check for port conflicts:
-```bash
-lsof -i :3456  # Default MCP port
-```
 
 ## Tips
 

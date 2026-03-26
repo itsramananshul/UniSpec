@@ -164,14 +164,6 @@ topic: "frontend"
 
 ## Automation
 
-### Auto-Index with Connectors
-
-Create a connector that indexes after builds:
-
-```bash
-unispec connector new index-src "Index source files" \
-  "bash" "-c" "find src -name '*.rs' -exec unispec index add --topic $TOPIC --path {} \;"
-```
 
 ### Git Hooks
 
