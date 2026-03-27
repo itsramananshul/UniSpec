@@ -35,6 +35,28 @@ pub struct ExtendedConfig {
     pub protected_areas: Vec<String>,
     #[serde(default = "default_paddy_enabled")]
     pub paddy_enabled: bool,
+    #[serde(default)]
+    pub ingest: IngestConfig,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IngestConfig {
+    #[serde(default = "default_auto_index")]
+    pub auto_index: bool,
+    #[serde(default)]
+    pub index_on_complete: bool,
+    #[serde(default = "default_capture_functions")]
+    pub capture_functions: bool,
+    #[serde(default = "default_capture_structs")]
+    pub capture_structs: bool,
+    #[serde(default = "default_capture_enums")]
+    pub capture_enums: bool,
+    #[serde(default = "default_capture_imports")]
+    pub capture_imports: bool,
+    #[serde(default = "default_output_format")]
+    pub output_format: String,
+    #[serde(default)]
+    pub languages: Vec<String>,
 }
 
 fn default_area() -> String {
@@ -43,6 +65,34 @@ fn default_area() -> String {
 
 fn default_paddy_enabled() -> bool {
     true
+}
+
+fn default_auto_index() -> bool {
+    false
+}
+
+fn default_index_on_complete() -> bool {
+    false
+}
+
+fn default_capture_functions() -> bool {
+    true
+}
+
+fn default_capture_structs() -> bool {
+    true
+}
+
+fn default_capture_enums() -> bool {
+    true
+}
+
+fn default_capture_imports() -> bool {
+    true
+}
+
+fn default_output_format() -> String {
+    "toml".to_string()
 }
 
 impl Default for ExtendedConfig {
@@ -55,6 +105,22 @@ impl Default for ExtendedConfig {
                 "Build".to_string(),
             ],
             paddy_enabled: true,
+            ingest: IngestConfig::default(),
+        }
+    }
+}
+
+impl Default for IngestConfig {
+    fn default() -> Self {
+        Self {
+            auto_index: false,
+            index_on_complete: false,
+            capture_functions: true,
+            capture_structs: true,
+            capture_enums: true,
+            capture_imports: true,
+            output_format: "toml".to_string(),
+            languages: vec![],
         }
     }
 }
@@ -78,6 +144,19 @@ pub fn get_paddy_enabled() -> Result<bool> {
 pub fn set_paddy_enabled(enabled: bool) -> Result<()> {
     let mut config = load_extended_config()?;
     config.paddy_enabled = enabled;
+    let content = toml::to_string_pretty(&config)?;
+    fs::write(&config_path(), content)?;
+    Ok(())
+}
+
+pub fn get_ingest_config() -> Result<IngestConfig> {
+    let config = load_extended_config()?;
+    Ok(config.ingest)
+}
+
+pub fn set_ingest_config(ingest: IngestConfig) -> Result<()> {
+    let mut config = load_extended_config()?;
+    config.ingest = ingest;
     let content = toml::to_string_pretty(&config)?;
     fs::write(&config_path(), content)?;
     Ok(())

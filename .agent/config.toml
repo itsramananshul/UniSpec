@@ -1,18 +1,13 @@
-# UniSpec Agent Configuration
+area = "Working"
+protected_areas = []
+paddy_enabled = false
 
-# Current active mode
-current_mode = "simple"
-
-# Default area for topic operations
-# default_area = "Working"
-
-# Protected areas that cannot be deleted
-# protected_areas = ["Staging", "Working", "Build"]
-
-# Connectors - Custom commands that become MCP tools
-# Example:
-# [[connector]]
-# name = "test"
-# description = "Run the test suite"
-# command = "pytest"
-# args = ["tests/", "-v"]
+[ingest]
+auto_index = true
+index_on_complete = false
+capture_functions = true
+capture_structs = true
+capture_enums = true
+capture_imports = true
+output_format = "toml"
+languages = []

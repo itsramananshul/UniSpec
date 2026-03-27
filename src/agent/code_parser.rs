@@ -559,3 +559,158 @@ pub fn analyze_directory(dir: &Path, languages: Vec<String>) -> Result<CodeAnaly
         files,
     })
 }
+
+pub fn parse_file_to_json(
+    path: &str,
+    language: Option<&str>,
+    item_type: &str,
+    pattern: Option<&str>,
+) -> Result<String> {
+    let file_path = Path::new(path);
+
+    if !file_path.exists() {
+        return Err(anyhow::anyhow!("File not found: {}", path));
+    }
+
+    let lang = language
+        .map(String::from)
+        .unwrap_or_else(|| detect_language(file_path));
+
+    if lang == "unknown" {
+        return Err(anyhow::anyhow!(
+            "Could not auto-detect language. Please specify with -l flag."
+        ));
+    }
+
+    let mut parser = CodeParser::new()?;
+    parser.set_language(&lang)?;
+
+    let code_file = parser.parse_file(file_path)?;
+
+    let result = filter_code_file(&code_file, item_type, pattern);
+    Ok(serde_json::to_string_pretty(&result)?)
+}
+
+fn detect_language(path: &Path) -> String {
+    if let Some(ext) = path.extension() {
+        if let Some(ext_str) = ext.to_str() {
+            match ext_str.to_lowercase().as_str() {
+                "rs" => return "rust".to_string(),
+                "js" | "jsx" => return "javascript".to_string(),
+                "ts" | "tsx" => return "typescript".to_string(),
+                "py" => return "python".to_string(),
+                "go" => return "go".to_string(),
+                "sh" | "bash" | "zsh" => return "bash".to_string(),
+                _ => {}
+            }
+        }
+    }
+
+    if let Ok(content) = std::fs::read_to_string(path) {
+        let first_line = content.lines().next().unwrap_or("");
+        if first_line.starts_with("#!") {
+            if first_line.contains("python") {
+                return "python".to_string();
+            }
+            if first_line.contains("bash") || first_line.contains("sh") {
+                return "bash".to_string();
+            }
+            if first_line.contains("node") {
+                return "javascript".to_string();
+            }
+            if first_line.contains("ruby") {
+                return "ruby".to_string();
+            }
+        }
+    }
+
+    "unknown".to_string()
+}
+
+fn filter_code_file(
+    code_file: &CodeFile,
+    item_type: &str,
+    pattern: Option<&str>,
+) -> serde_json::Value {
+    let pattern_lower = pattern.map(|p| p.to_lowercase());
+
+    let matches_pattern = |name: &str| -> bool {
+        pattern_lower
+            .as_ref()
+            .map_or(true, |p| name.to_lowercase().contains(p))
+    };
+
+    let functions: Vec<_> = code_file
+        .functions
+        .iter()
+        .filter(|f| item_type == "all" || item_type == "functions")
+        .filter(|f| matches_pattern(&f.name))
+        .map(|f| {
+            serde_json::json!({
+                "name": f.name,
+                "signature": f.signature,
+                "start_line": f.start_line,
+                "end_line": f.end_line,
+                "docs": f.docs
+            })
+        })
+        .collect();
+
+    let structs: Vec<_> = code_file
+        .structs
+        .iter()
+        .filter(|s| item_type == "all" || item_type == "structs")
+        .filter(|s| matches_pattern(&s.name))
+        .map(|s| {
+            serde_json::json!({
+                "name": s.name,
+                "docs": s.docs,
+                "fields": s.fields.iter().map(|f| serde_json::json!({
+                    "name": f.name,
+                    "type": f.type_name
+                })).collect::<Vec<_>>()
+            })
+        })
+        .collect();
+
+    let enums: Vec<_> = code_file
+        .enums
+        .iter()
+        .filter(|e| item_type == "all" || item_type == "enums")
+        .filter(|e| matches_pattern(&e.name))
+        .map(|e| {
+            serde_json::json!({
+                "name": e.name,
+                "docs": e.docs,
+                "variants": e.variants
+            })
+        })
+        .collect();
+
+    let imports: Vec<_> = code_file
+        .imports
+        .iter()
+        .filter(|i| item_type == "all" || item_type == "imports")
+        .map(|i| {
+            serde_json::json!({
+                "path": i.path,
+                "items": i.items
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "path": code_file.path,
+        "language": code_file.language,
+        "functions": functions,
+        "structs": structs,
+        "enums": enums,
+        "imports": imports,
+        "counts": {
+            "functions": functions.len(),
+            "structs": structs.len(),
+            "enums": enums.len(),
+            "imports": imports.len()
+        }
+    })
+}

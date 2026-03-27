@@ -40,6 +40,9 @@ pub fn run_ingest(
 
     println!("🔍 Analyzing codebase at {}...", path);
 
+    // Load ingest config
+    let ingest_config = crate::fs::config::get_ingest_config()?;
+
     // Initial analysis
     let analysis = analyze_directory(code_path, langs.clone())?;
 
@@ -49,8 +52,62 @@ pub fn run_ingest(
     println!("   Structs: {}", analysis.total_structs);
     println!("   Enums: {}", analysis.total_enums);
 
-    // Create hierarchical topic structure
-    create_topic_hierarchy(&analysis, topic, area)?;
+    // Save to code_analysis.toml if format is toml
+    if ingest_config.output_format == "toml" {
+        let analysis_files: Vec<crate::fs::index::CodeAnalysisFile> = analysis
+            .files
+            .iter()
+            .map(|f| crate::fs::index::CodeAnalysisFile {
+                path: f.path.clone(),
+                language: f.language.clone(),
+                functions: f
+                    .functions
+                    .iter()
+                    .map(|g| crate::fs::index::CodeElement {
+                        name: g.name.clone(),
+                        signature: Some(g.signature.clone()),
+                        start_line: Some(g.start_line),
+                        end_line: Some(g.end_line),
+                    })
+                    .collect(),
+                structs: f
+                    .structs
+                    .iter()
+                    .map(|s| crate::fs::index::CodeElement {
+                        name: s.name.clone(),
+                        signature: None,
+                        start_line: None,
+                        end_line: None,
+                    })
+                    .collect(),
+                enums: f
+                    .enums
+                    .iter()
+                    .map(|e| crate::fs::index::CodeElement {
+                        name: e.name.clone(),
+                        signature: None,
+                        start_line: None,
+                        end_line: None,
+                    })
+                    .collect(),
+                imports: f.imports.iter().map(|i| i.path.clone()).collect(),
+            })
+            .collect();
+
+        crate::fs::index::add_code_analysis(topic, area, path, analysis_files)?;
+        println!("✅ Saved to code_analysis.toml");
+    }
+
+    // Create hierarchical topic structure with MD files (for display)
+    if ingest_config.output_format != "toml" || ingest_config.output_format == "both" {
+        create_topic_hierarchy(&analysis, topic, area)?;
+    }
+
+    // Auto-add to index if enabled
+    if ingest_config.auto_index {
+        crate::fs::index::add_link(topic, area, path, "directory")?;
+        println!("✅ Auto-indexed to index.toml");
+    }
 
     // Start watching if requested
     if watch {

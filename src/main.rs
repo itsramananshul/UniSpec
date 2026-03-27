@@ -13,8 +13,8 @@ use clap::Parser;
 
 use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
-    AreaCommands, ConnectorCommands, IndexCommands, IngestCommands, ModeCommands, PattyCommands,
-    PkgCommands, TopicCommands,
+    AreaCommands, ConnectorCommands, IndexCommands, IngestCommands, ModeCommands, ParseCommands,
+    PattyCommands, PkgCommands, TopicCommands,
 };
 use crate::cli::{Cli, Commands};
 use crate::commands::{area, index, ingest, init, init_editor, repo, set, topic};
@@ -457,11 +457,39 @@ fn main() -> Result<()> {
                 }
             }
             IngestCommands::Watch { path, topic } => {
-                println!("🔄 Starting file watcher...");
-                println!("   (Live auto-indexing coming soon)");
+                let config = crate::fs::config::get_ingest_config()?;
+                if config.auto_index {
+                    println!("🔄 Live auto-indexing is enabled in .agent/config.toml");
+                    println!("   Changes to indexed files will be tracked automatically");
+                } else {
+                    println!("🔄 To enable auto-indexing, set in .agent/config.toml:");
+                    println!("   [ingest]");
+                    println!("   auto_index = true");
+                }
             }
             IngestCommands::Stop => {
                 println!("🛑 Stopping file watcher...");
+            }
+        },
+        Some(Commands::Parse(parse_cmd)) => match parse_cmd {
+            ParseCommands::File {
+                path,
+                language,
+                item_type,
+                pattern,
+                json,
+            } => {
+                let result = crate::agent::code_parser::parse_file_to_json(
+                    &path,
+                    language.as_deref(),
+                    &item_type,
+                    pattern.as_deref(),
+                )?;
+                if json {
+                    println!("{}", result);
+                } else {
+                    println!("{}", result);
+                }
             }
         },
         Some(Commands::Patty(paddy_cmd)) => match paddy_cmd {

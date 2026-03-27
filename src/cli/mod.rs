@@ -193,6 +193,9 @@ pub enum Commands {
     /// Ingest a codebase and create specs from it
     #[command(subcommand)]
     Ingest(IngestCommands),
+    /// Parse a single file with tree-sitter (auto-detects language)
+    #[command(subcommand)]
+    Parse(ParseCommands),
     /// Control platypus mascot display
     #[command(subcommand)]
     Patty(PattyCommands),
@@ -428,7 +431,7 @@ pub enum IndexCommands {
         #[arg(short, long)]
         path: Option<String>,
         /// Filter by tag
-        #[arg(short, long)]
+        #[arg(long)]
         tag: Option<String>,
     },
     /// Find links by topic, path, or tag
@@ -566,4 +569,25 @@ pub enum IngestCommands {
     },
     /// Stop watching
     Stop,
+}
+
+#[derive(Subcommand)]
+pub enum ParseCommands {
+    /// Parse a single file and extract code elements
+    File {
+        /// Path to the file to parse
+        path: String,
+        /// Language to use (auto-detected if not specified)
+        #[arg(short, long)]
+        language: Option<String>,
+        /// What to extract: functions, structs, enums, imports, all (default: all)
+        #[arg(short, long, default_value = "all")]
+        item_type: String,
+        /// Filter by name pattern
+        #[arg(short, long)]
+        pattern: Option<String>,
+        /// Output as JSON (for agent consumption)
+        #[arg(long)]
+        json: bool,
+    },
 }

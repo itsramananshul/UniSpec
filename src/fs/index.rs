@@ -45,6 +45,10 @@ pub fn index_path() -> PathBuf {
     crate::fs::spec_dir().join("index.toml")
 }
 
+pub fn code_analysis_path() -> PathBuf {
+    crate::fs::spec_dir().join("code_analysis.toml")
+}
+
 pub fn load_index() -> Result<Index> {
     let path = index_path();
     if !path.exists() {
@@ -60,6 +64,73 @@ pub fn save_index(index: &Index) -> Result<()> {
     let content = toml::to_string_pretty(index)?;
     fs::write(&path, content)?;
     Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct CodeAnalysisStore {
+    pub topics: std::collections::HashMap<String, CodeAnalysisTopic>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeAnalysisTopic {
+    pub area: String,
+    pub source_path: String,
+    pub analyzed: String,
+    pub files: Vec<CodeAnalysisFile>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeAnalysisFile {
+    pub path: String,
+    pub language: String,
+    pub functions: Vec<CodeElement>,
+    pub structs: Vec<CodeElement>,
+    pub enums: Vec<CodeElement>,
+    pub imports: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodeElement {
+    pub name: String,
+    pub signature: Option<String>,
+    pub start_line: Option<u32>,
+    pub end_line: Option<u32>,
+}
+
+pub fn load_code_analysis() -> Result<CodeAnalysisStore> {
+    let path = code_analysis_path();
+    if !path.exists() {
+        return Ok(CodeAnalysisStore::default());
+    }
+    let content = fs::read_to_string(&path)?;
+    let store: CodeAnalysisStore = toml::from_str(&content)?;
+    Ok(store)
+}
+
+pub fn save_code_analysis(store: &CodeAnalysisStore) -> Result<()> {
+    let path = code_analysis_path();
+    let content = toml::to_string_pretty(store)?;
+    fs::write(&path, content)?;
+    Ok(())
+}
+
+pub fn add_code_analysis(
+    topic: &str,
+    area: &str,
+    source_path: &str,
+    files: Vec<CodeAnalysisFile>,
+) -> Result<()> {
+    let mut store = load_code_analysis()?;
+
+    let topic_entry = CodeAnalysisTopic {
+        area: area.to_string(),
+        source_path: source_path.to_string(),
+        analyzed: chrono::Utc::now().to_rfc3339(),
+        files,
+    };
+
+    store.topics.insert(topic.to_string(), topic_entry);
+    save_code_analysis(&store)
 }
 
 pub fn add_link(topic: &str, area: &str, path: &str, link_type: &str) -> Result<()> {

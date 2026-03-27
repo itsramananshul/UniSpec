@@ -527,6 +527,33 @@ pub fn get_tools() -> Vec<Tool> {
                 "required": ["topic"]
             }),
         },
+        Tool {
+            name: "code_parse".to_string(),
+            description: "Parse a single file on-demand using tree-sitter - useful for debugging or finding code elements while working".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to parse"
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Language (auto-detected if not specified): rust, javascript, typescript, python, go, bash"
+                    },
+                    "item_type": {
+                        "type": "string",
+                        "description": "What to extract: functions, structs, enums, imports, all (default: all)",
+                        "default": "all"
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Filter by name pattern"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
     ];
 
     // Add dynamic connector tools

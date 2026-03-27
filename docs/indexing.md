@@ -516,6 +516,64 @@ unispec index backlinks --topic "payment-api"
 
 ---
 
+## Code Analysis Store (TOML)
+
+UniSpec stores code analysis data in `spec/code_analysis.toml`. This provides a central repository for all code extracted from ingested topics.
+
+### File Structure
+
+```toml
+[topics.myproject]
+area = "Ingested"
+source_path = "./src"
+analyzed = "2026-03-26T10:00:00Z"
+
+[[topics.myproject.files]]
+path = "src/main.rs"
+language = "rust"
+functions = [
+  { name = "main", signature = "fn main()", start_line = 1, end_line = 10 }
+]
+structs = [
+  { name = "Cli" }
+]
+enums = []
+imports = ["use std::..."]
+```
+
+### How It Works
+
+1. **During Ingest**: When you run `unispec ingest run`, tree-sitter parses all files
+2. **Configuration**: Controlled by `.agent/config.toml` `[ingest]` settings
+3. **Storage**: Saved to `spec/code_analysis.toml` (or MD files, or both)
+
+### Configuration
+
+In `.agent/config.toml`:
+
+```toml
+[ingest]
+auto_index = true           # Auto-add to index.toml when ingesting
+capture_functions = true    # Extract functions
+capture_structs = true      # Extract structs
+capture_enums = true       # Extract enums
+capture_imports = true     # Extract imports
+output_format = "toml"      # "toml", "md", or "both"
+languages = []              # Specific languages (empty = all)
+```
+
+### MCP Access
+
+```python
+# Query code analysis from topics
+{"name": "code_analysis", "arguments": {"topic": "myproject", "item_type": "functions"}}
+
+# Parse any file on-demand
+{"name": "code_parse", "arguments": {"path": "src/main.rs", "item_type": "functions"}}
+```
+
+---
+
 ## See Also
 
 - [Commands Reference](commands.md) - CLI command documentation

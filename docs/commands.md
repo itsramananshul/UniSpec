@@ -1111,23 +1111,19 @@ unispec ingest run src --languages rust,go
 ```
 
 **Output:**
-Creates a topic with:
-- `specs.md` - Overview with statistics, modules, structs, enums
-- `links.md` - Dependencies and imports for each file
-- `functions.md` - All functions with signatures and line numbers
+Based on `.agent/config.toml` `[ingest]` settings:
+- `output_format = "toml"` → saves to `spec/code_analysis.toml`
+- `output_format = "md"` → creates `specs.md`, `links.md`, `functions.md` files
+- `output_format = "both"` → creates both TOML and MD files
+- `auto_index = true` → automatically adds to `spec/index.toml`
 
 #### Watch
 
-Start live file watching for auto-indexing (coming soon).
+Show auto-indexing status (configured in `.agent/config.toml`).
 
 ```bash
-unispec ingest watch [OPTIONS]
+unispec ingest watch
 ```
-
-| Option | Description |
-|--------|-------------|
-| `-p, --path <path>` | Path to watch (default: current directory) |
-| `-t, --topic <name>` | Topic to link code to |
 
 #### Stop
 
@@ -1135,6 +1131,44 @@ Stop the file watcher.
 
 ```bash
 unispec ingest stop
+```
+
+---
+
+## Parse
+
+Parse a single file using tree-sitter and extract code elements. Auto-detects language from extension or shebang.
+
+```bash
+unispec parse file <path> [OPTIONS]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `path` | Path to the file to parse |
+
+| Option | Description |
+|--------|-------------|
+| `-l, --language <lang>` | Language to use (auto-detected if not specified) |
+| `-i, --item-type <type>` | What to extract: functions, structs, enums, imports, all (default: all) |
+| `-p, --pattern <pat>` | Filter by name pattern |
+| `--json` | Output as JSON (for agent consumption) |
+
+**Supported Languages:** rust, javascript, typescript, python, go, bash
+
+**Example:**
+```bash
+# Parse a file, auto-detect language
+unispec parse file src/main.rs
+
+# Extract only functions
+unispec parse file src/utils.rs --item-type functions
+
+# Find specific function by pattern
+unispec parse file src/main.rs --item-type functions --pattern "handle_"
+
+# Output as JSON for agent
+unispec parse file src/main.rs --json
 ```
 
 ---

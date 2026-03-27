@@ -80,26 +80,26 @@ UniSpec provides **33 built-in MCP tools** plus dynamic tools for each connector
 | `connector_list` | List all available connectors | `unispec connector list` |
 | `connector_run` | Run a connector command | `unispec connector run` |
 | `unispec_<name>` | Dynamic tool for each connector | `unispec connector run <name>` |
-| `index_remove` | Remove a link | `unispec index remove` |
-| `index_find` | Find links by topic or path | `unispec index find` |
-| `index_cleanup` | Remove orphaned links | `unispec index cleanup` |
 
-### Mode Management (4 tools)
+### Code Analysis (2 tools) - NEW
 
 | MCP Tool | Description | CLI Equivalent |
 |----------|-------------|----------------|
-| `mode_list` | List all available modes | `unispec mode list` |
-| `mode_info` | Get detailed info about a mode | `unispec mode info` |
-| `mode_activate` | Activate an agent mode | `unispec mode activate` |
-| `mode_current` | Get the current active mode | `unispec mode current` |
+| `code_analysis` | Query code analysis data from ingested topics | `unispec ingest run` + TOML |
+| `code_parse` | Parse any file on-demand using tree-sitter | `unispec parse file` |
 
-### Connector Tools (2 + dynamic)
+These tools allow the AI agent to:
+- **Query indexed code**: Get functions, structs, enums from topics stored in `spec/code_analysis.toml`
+- **Parse on-demand**: Extract code elements from any file while debugging or investigating
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `connector_list` | List all available connectors | `unispec connector list` |
-| `connector_run` | Run a connector command | `unispec connector run` |
-| `unispec_<name>` | Dynamic tool per connector | Custom commands |
+**Example usage:**
+```json
+// code_analysis - query indexed topics
+{ "topic": "myproject", "area": "Ingested", "item_type": "functions" }
+
+// code_parse - parse any file
+{ "path": "src/main.rs", "item_type": "functions", "pattern": "handle_" }
+```
 
 ### Configuration (2 tools)
 

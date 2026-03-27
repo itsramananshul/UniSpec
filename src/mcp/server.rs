@@ -318,6 +318,21 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             )?;
             Ok(json!({ "success": true, "data": result }))
         }
+        "code_parse" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap();
+            let language = args.get("language").and_then(|v| v.as_str());
+            let item_type = args
+                .get("item_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("all");
+            let pattern = args.get("pattern").and_then(|v| v.as_str());
+
+            let result =
+                crate::agent::code_parser::parse_file_to_json(path, language, item_type, pattern)?;
+            Ok(
+                json!({ "success": true, "data": serde_json::from_str::<serde_json::Value>(&result).unwrap() }),
+            )
+        }
         name => {
             // Check if it's a dynamic connector tool
             if name.starts_with("unispec_") {

@@ -410,7 +410,11 @@ impl App {
                     } else if self.input_prompt.starts_with("Remove link '")
                         && self.input_prompt.ends_with("'? (y/N)")
                     {
-                        let confirm = self.input_buffer.to_lowercase() == "y";
+                        let confirm = self
+                            .pending_args
+                            .first()
+                            .map(|s| s.to_lowercase() == "y")
+                            .unwrap_or(false);
                         if confirm {
                             let path = self.pending_link_path.clone().unwrap_or_default();
                             let topic = self.pending_link_topic.clone().unwrap_or_default();

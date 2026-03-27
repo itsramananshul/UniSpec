@@ -97,6 +97,20 @@ default_area = "Working"
 # Protected areas that cannot be deleted
 protected_areas = ["Staging", "Working", "Build"]
 
+# Enable/disable platypus mascot
+paddy_enabled = true
+
+# Ingest Configuration - How code is analyzed and stored
+[ingest]
+auto_index = true              # Automatically add to index when ingesting
+index_on_complete = false       # Index when topic is marked complete (future)
+capture_functions = true       # Extract functions from code
+capture_structs = true         # Extract structs from code
+capture_enums = true           # Extract enums from code
+capture_imports = true         # Extract imports from code
+output_format = "toml"         # Output format: "toml", "md", or "both"
+languages = []                 # Languages to parse (empty = all: rust, javascript, typescript, python, go, bash)
+
 # Connectors - Custom commands that become MCP tools
 [[connector]]
 name = "test"
@@ -115,6 +129,31 @@ timeout = 120
 | `current_mode` | string | Active agent mode | `"simple"` |
 | `default_area` | string | Default area for operations | `"Working"` |
 | `protected_areas` | array | Areas that cannot be deleted | `["Staging", "Working", "Build"]` |
+| `paddy_enabled` | boolean | Show platypus mascot in TUI | `true` |
+
+### Ingest Configuration Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `ingest.auto_index` | boolean | Auto-add to index.toml on ingest | `false` |
+| `ingest.index_on_complete` | boolean | Index when topic marked complete | `false` |
+| `ingest.capture_functions` | boolean | Extract functions | `true` |
+| `ingest.capture_structs` | boolean | Extract structs | `true` |
+| `ingest.capture_enums` | boolean | Extract enums | `true` |
+| `ingest.capture_imports` | boolean | Extract imports | `true` |
+| `ingest.output_format` | string | Storage format: "toml", "md", "both" | `"toml"` |
+| `ingest.languages` | array | Specific languages to parse | `[]` (all) |
+
+### Supported Languages for Ingest
+
+| Language | Extensions | Grammar |
+|----------|------------|---------|
+| Rust | `.rs` | tree-sitter-rust |
+| JavaScript | `.js`, `.jsx` | tree-sitter-javascript |
+| TypeScript | `.ts`, `.tsx` | tree-sitter-typescript |
+| Python | `.py` | tree-sitter-python |
+| Go | `.go` | tree-sitter-go |
+| Bash | `.sh`, `.bash` | tree-sitter-bash |
 
 ### Connector Configuration
 
