@@ -171,6 +171,7 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
 // Re-export modules
 pub mod config;
 pub mod index;
+pub mod spec;
 
 // Re-export Area from cli::model
 pub use crate::cli::model::Area;

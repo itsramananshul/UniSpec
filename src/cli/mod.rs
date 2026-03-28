@@ -328,10 +328,10 @@ pub enum TopicCommands {
     /// List topics in an area
     List {
         /// Area to list topics from (default: Working)
-        #[arg(short, long, default_value = "Working")]
+        #[arg(short = 'a', long, default_value = "Working")]
         area: String,
         /// Show hierarchical view
-        #[arg(short, long)]
+        #[arg(short = 'H', long)]
         hierarchy: bool,
     },
     /// Push a topic to another area

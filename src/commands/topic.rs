@@ -6,6 +6,15 @@ use std::fs;
 use std::iter::repeat;
 
 pub fn run_new(topic: &str, area_str: &str) -> Result<String> {
+    run_new_with_metadata(topic, area_str, None, None)
+}
+
+pub fn run_new_with_metadata(
+    topic: &str,
+    area_str: &str,
+    impact: Option<&str>,
+    change_type: Option<&str>,
+) -> Result<String> {
     let topic_path = topic_path(topic, area_str);
 
     if topic_path.exists() {
@@ -18,28 +27,49 @@ pub fn run_new(topic: &str, area_str: &str) -> Result<String> {
 
     ensure_dir(&topic_path)?;
 
-    // Get output file names from mode config (may be overridden per area)
     let spec_filename = crate::agent::mode::get_spec_filename_for_area(area_str);
     let task_filename = crate::agent::mode::get_task_filename_for_area(area_str);
 
-    // Get base template file names - always use the base names (specs.md, tasks.md)
-    // for reading templates from the mode directory
-    let spec_template_name = "specs.md";
-    let task_template_name = "tasks.md";
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-    // Get templates from current mode - read from base template name, write to area-specific filename
-    // First try area-specific templates, then fallback to global templates
-    let specs_template = crate::fs::read_area_template(area_str, &spec_template_name)
-        .unwrap_or_else(|| read_default_specs_template());
-    let tasks_template = crate::fs::read_area_template(area_str, &task_template_name)
+    let spec_content = if impact.is_some() || change_type.is_some() {
+        let impact_line = impact.map(|i| format!("impact: {}", i)).unwrap_or_default();
+        let change_type_line = change_type
+            .map(|ct| format!("change_type: {}", ct))
+            .unwrap_or_default();
+        let status_line = "status: proposed".to_string();
+
+        format!(
+            "---\ntitle: {}\n{}\n{}\n{}\ncreated: {}\n---\n\n# {}\n\n## Problem Statement\n\nWhat problem does this solve?\n\n## Requirements\n\n### Must Have\n- [ ] Requirement 1\n- [ ] Requirement 2\n\n## Acceptance Criteria\n\n- [ ] Criterion 1\n- [ ] Criterion 2\n",
+            topic,
+            impact_line,
+            change_type_line,
+            status_line,
+            today,
+            topic
+        )
+    } else {
+        let specs_template = crate::fs::read_area_template(area_str, "specs.md")
+            .unwrap_or_else(|| read_default_specs_template());
+        specs_template
+    };
+
+    let tasks_template = crate::fs::read_area_template(area_str, "tasks.md")
         .unwrap_or_else(|| read_default_tasks_template());
 
-    // Create specs and tasks files from templates (using area-specific output filenames)
-    // Note: area.md is not created in topic - it belongs to the area
-    fs::write(topic_path.join(&spec_filename), &specs_template)?;
+    fs::write(topic_path.join(&spec_filename), &spec_content)?;
     fs::write(topic_path.join(&task_filename), &tasks_template)?;
 
-    Ok(format!("✅ Topic '{}' created in {}/", topic, area_str))
+    let type_info = if let (Some(i), Some(ct)) = (impact, change_type) {
+        format!(" ({}: {})", i, ct)
+    } else {
+        String::new()
+    };
+
+    Ok(format!(
+        "✅ Topic '{}' created in {}/{}",
+        topic, area_str, type_info
+    ))
 }
 
 fn read_default_specs_template() -> String {
@@ -164,28 +194,41 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
         }
 
         // Second, if this is a spec or task file, create target version from template
-        let target_filename = if filename == src_spec {
-            dst_spec.clone()
-        } else if filename == src_task {
-            dst_task.clone()
-        } else {
-            // Not a spec/task file, skip target version
+        let is_spec_file = filename == src_spec
+            || filename == dst_spec
+            || filename.ends_with("_spec.md")
+            || filename.ends_with("_specs.md")
+            || filename == "spec.md"
+            || filename == "specs.md";
+        let is_task_file = filename == src_task
+            || filename == dst_task
+            || filename.ends_with("_tasks.md")
+            || filename == "tasks.md";
+
+        if !is_spec_file && !is_task_file {
             continue;
+        }
+
+        let target_filename = if is_spec_file {
+            dst_spec.clone()
+        } else {
+            dst_task.clone()
         };
 
         // Only create target file if it has a different name
-        if target_filename != filename {
+        if target_filename != filename || is_spec_file {
             let target_dest = dst.join(&target_filename);
-            // Read template for target area instead of copying source file
-            let template_content = if filename == src_spec {
-                crate::fs::read_area_template(target_area, "specs.md")
-            } else if filename == src_task {
-                crate::fs::read_area_template(target_area, "tasks.md")
-            } else {
-                None
-            };
 
-            if let Some(content) = template_content {
+            let mut content: String;
+
+            // Check if pushing to Build and it's a spec file
+            let is_build = target_area.to_lowercase() == "build";
+
+            if is_build && is_spec_file {
+                // Read source file and add completion metadata
+                content = fs::read_to_string(&path)?;
+                let today = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                content = add_completion_metadata(&content, &today);
                 fs::write(&target_dest, &content)?;
             } else if path.is_file() {
                 fs::copy(&path, &target_dest)?;
@@ -193,10 +236,92 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
         }
     }
 
+    let completed_info = if target_area.to_lowercase() == "build" {
+        let today = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        format!(" (completed: {})", today)
+    } else {
+        String::new()
+    };
+
     Ok(format!(
-        "✅ Pushed topic '{}' from {} to {} (now has files for both areas)",
-        topic, source_area, target_area
+        "✅ Pushed '{}' from {} → {}{}",
+        topic, source_area, target_area, completed_info
     ))
+}
+
+fn add_completion_metadata(content: &str, completed_date: &str) -> String {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+    // Find if there's frontmatter
+    if !content.starts_with("---") {
+        return content.to_string();
+    }
+
+    // Find the end of frontmatter
+    if let Some(end_idx) = content.find("\n---\n").or_else(|| content.find("\n--- ")) {
+        let frontmatter = &content[3..end_idx];
+        let rest = &content[end_idx + 4..];
+
+        // Parse existing frontmatter
+        let mut lines: Vec<String> = frontmatter.lines().map(|l| l.to_string()).collect();
+
+        // Update or add fields
+        let mut has_status = false;
+        let mut has_modified = false;
+        let mut has_completed = false;
+        let mut has_created = false;
+
+        for line in &lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with("status:") {
+                has_status = true;
+            } else if trimmed.starts_with("modified:") {
+                has_modified = true;
+            } else if trimmed.starts_with("completed:") {
+                has_completed = true;
+            } else if trimmed.starts_with("created:") {
+                has_created = true;
+            }
+        }
+
+        // Update lines in place or add new ones
+        for line in &mut lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with("status:") {
+                *line = format!("status: completed");
+                has_status = true;
+            } else if trimmed.starts_with("modified:") {
+                *line = format!("modified: {}", today);
+                has_modified = true;
+            } else if trimmed.starts_with("completed:") {
+                *line = format!("completed: {}", completed_date);
+                has_completed = true;
+            }
+        }
+
+        // Add missing fields
+        if !has_status {
+            lines.push("status: completed".to_string());
+        }
+        if !has_modified {
+            lines.push(format!("modified: {}", today));
+        }
+        if !has_completed {
+            lines.push(format!("completed: {}", completed_date));
+        }
+        if !has_created {
+            lines.push(format!("created: {}", today));
+        }
+
+        // Reconstruct
+        format!("---\n{}\n---\n{}", lines.join("\n"), rest)
+    } else {
+        // No proper frontmatter, add at the top
+        format!(
+            "---\ntitle: Topic\nstatus: completed\ncreated: {}\nmodified: {}\ncompleted: {}\n---\n\n{}",
+            today, today, completed_date, content
+        )
+    }
 }
 
 pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {

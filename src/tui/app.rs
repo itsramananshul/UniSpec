@@ -50,6 +50,8 @@ pub struct App {
     pub input_buffer: String,
     pub input_prompt: String,
     pub pending_args: Vec<String>,
+    pub pending_impact: Option<String>,
+    pub pending_change_type: Option<String>,
     pub message_timer: Option<Instant>,
     pub find_paths: Vec<String>,
     pub saved_topics: Vec<TopicNode>,
@@ -77,6 +79,8 @@ impl App {
             input_buffer: String::new(),
             input_prompt: String::new(),
             pending_args: vec![],
+            pending_impact: None,
+            pending_change_type: None,
             message_timer: None,
             find_paths: vec![],
             saved_topics: vec![],
@@ -100,6 +104,43 @@ impl App {
         self.platypus_state = state;
         self.animation_step = 0;
         self.expression_timer = Some(Instant::now() + Duration::from_secs(duration_secs));
+    }
+
+    fn get_area_type(&self, area: &str) -> crate::agent::mode::DisplayType {
+        let area_lower = area.to_lowercase();
+
+        // First, check area name directly - most reliable
+        if area_lower.contains("roadmap") {
+            return crate::agent::mode::DisplayType::Roadmap;
+        }
+        if area_lower.contains("build") && area_lower != "working" {
+            return crate::agent::mode::DisplayType::Build;
+        }
+        if area_lower.contains("working") {
+            return crate::agent::mode::DisplayType::Working;
+        }
+
+        // Then check mode config
+        if let Ok(mode_name) = crate::agent::current_mode() {
+            if let Ok(config) = crate::agent::mode::get_mode_info(&mode_name) {
+                if let Some(ref roadmap_config) = config.area_types.roadmap {
+                    if area_lower == "roadmap" || area_lower.contains("roadmap") {
+                        return crate::agent::mode::DisplayType::Roadmap;
+                    }
+                }
+                if let Some(ref working_config) = config.area_types.working {
+                    if area_lower == "working" || area_lower.contains("working") {
+                        return crate::agent::mode::DisplayType::Working;
+                    }
+                }
+                if let Some(ref build_config) = config.area_types.build {
+                    if area_lower == "build" || area_lower.contains("build") {
+                        return crate::agent::mode::DisplayType::Build;
+                    }
+                }
+            }
+        }
+        crate::agent::mode::DisplayType::Standard
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -219,22 +260,62 @@ impl App {
                         f.render_stateful_widget(list, if self.platypus_enabled { chunks[2] } else { chunks[1] }, &mut self.list_state);
                     }
                     _ => {
+                        let area_type = self.state.topics.first().map(|t| t.area_type.clone()).unwrap_or(crate::agent::mode::DisplayType::Standard);
+                        
                         let items: Vec<ListItem> = self.state.topics.iter().enumerate().map(|(i, t)| {
                             let style = if Some(i) == self.list_state.selected() { Style::default().fg(Color::Yellow) } else { Style::default() };
-                            let progress = if t.tasks_total > 0 { (t.tasks_completed * 100 / t.tasks_total) as u16 } else { 0 };
-                            let bar_width = 20;
-                            let filled = (progress as usize * bar_width) / 100;
-                            let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(bar_width - filled));
+                            
+                            let display_line = match t.area_type {
+                                crate::agent::mode::DisplayType::Roadmap => {
+                                    let impact = t.metadata.impact.as_deref().unwrap_or("");
+                                    let change_type = t.metadata.change_type.as_deref().unwrap_or("");
+                                    
+                                    let impact_labels = crate::agent::mode::get_impact_labels("roadmap");
+                                    let type_labels = crate::agent::mode::get_change_type_labels("roadmap");
+                                    
+                                    let impact_badge = impact_labels.get(&impact.to_lowercase())
+                                        .cloned()
+                                        .unwrap_or_else(|| format!("[{}]", impact.to_uppercase()));
+                                    let type_badge = type_labels.get(&change_type.to_lowercase())
+                                        .cloned()
+                                        .unwrap_or_else(|| change_type.to_string());
+                                    
+                                    if impact.is_empty() && change_type.is_empty() {
+                                        t.topic.clone()
+                                    } else if impact.is_empty() {
+                                        format!("{} │ {}", t.topic, type_badge)
+                                    } else if change_type.is_empty() {
+                                        format!("{} │ {}", t.topic, impact_badge)
+                                    } else {
+                                        format!("{} │ {} │ {}", t.topic, type_badge, impact_badge)
+                                    }
+                                }
+                                crate::agent::mode::DisplayType::Build => {
+                                    let completed = t.metadata.completed.as_ref()
+                                        .or(t.metadata.modified.as_ref())
+                                        .map(|d| d.as_str())
+                                        .unwrap_or("---");
+                                    format!("✅ {} │ completed: {}", t.topic, completed)
+                                }
+                                crate::agent::mode::DisplayType::Working | crate::agent::mode::DisplayType::Standard => {
+                                    let progress = if t.tasks_total > 0 { (t.tasks_completed * 100 / t.tasks_total) as u16 } else { 0 };
+                                    let bar_width = 20;
+                                    let filled = (progress as usize * bar_width) / 100;
+                                    let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(bar_width - filled));
 
-                            let status_icon = if t.status == "complete" { "✅" } else if t.tasks_in_progress > 0 { "🚧" } else { "⏳" };
-                            let animation = if t.tasks_in_progress > 0 {
-                                if self.frame % 4 < 1 { "⠋" } else { "⠙" }
-                            } else { "-" };
+                                    let status_icon = if t.status == "complete" { "✅" } else if t.tasks_in_progress > 0 { "🚧" } else { "⏳" };
+                                    let animation = if t.tasks_in_progress > 0 {
+                                        if self.frame % 4 < 1 { "⠋" } else { "⠙" }
+                                    } else { "-" };
 
-                            let arrow = if !t.children.is_empty() { " >" } else { "" };
-                            let topic_display = format!("{:<25}", if t.topic.len() > 25 { format!("{}...", &t.topic[..22]) } else { t.topic.clone() });
+                                    let arrow = if !t.children.is_empty() { " >" } else { "" };
+                                    let topic_display = format!("{:<25}", if t.topic.len() > 25 { format!("{}...", &t.topic[..22]) } else { t.topic.clone() });
 
-                            ListItem::new(format!("{} {} {} {} ({}/{}){}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow)).style(style)
+                                    format!("{} {} {} {} ({}/{}){}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow)
+                                }
+                            };
+                            
+                            ListItem::new(display_line).style(style)
                         }).collect();
                         let list = List::new(items).block(Block::default().title("Specs").borders(Borders::ALL))
                             .highlight_symbol(">> ");
@@ -286,38 +367,125 @@ impl App {
 
                     if self.input_prompt == "Name for new spec?" {
                         if let Some(area) = &self.current_area {
-                            let topic_name = self.pending_args[0].clone();
+                            let area_type = self.get_area_type(area);
 
-                            let full_path = match &self.state.nav_state {
-                                NavState::TopicList(_) => topic_name.clone(),
-                                NavState::NestedSpecs(ref path) => {
-                                    let spec_dir = crate::fs::spec_dir();
-                                    if let Ok(rel) = path.strip_prefix(spec_dir.join(area)) {
-                                        let parent = rel
-                                            .to_string_lossy()
-                                            .trim_start_matches('/')
-                                            .to_string();
-                                        format!("{}/{}", parent, topic_name)
-                                    } else {
-                                        topic_name.clone()
+                            if area_type == crate::agent::mode::DisplayType::Roadmap {
+                                self.input_mode = true;
+                                self.input_prompt =
+                                    "Impact (critical/high/medium/low)?".to_string();
+                            } else {
+                                let topic_name = self.pending_args[0].clone();
+                                let full_path = match &self.state.nav_state {
+                                    NavState::TopicList(_) => topic_name.clone(),
+                                    NavState::NestedSpecs(ref path) => {
+                                        let spec_dir = crate::fs::spec_dir();
+                                        if let Ok(rel) = path.strip_prefix(spec_dir.join(area)) {
+                                            let parent = rel
+                                                .to_string_lossy()
+                                                .trim_start_matches('/')
+                                                .to_string();
+                                            format!("{}/{}", parent, topic_name)
+                                        } else {
+                                            topic_name.clone()
+                                        }
                                     }
-                                }
-                                _ => topic_name.clone(),
-                            };
+                                    _ => topic_name.clone(),
+                                };
 
-                            match crate::commands::topic::run_new(&full_path, area) {
-                                Ok(msg) => {
-                                    self.message = Some(msg);
-                                    self.trigger_expression(PlatypusState::Happy, 2);
+                                match crate::commands::topic::run_new(&full_path, area) {
+                                    Ok(msg) => {
+                                        self.message = Some(msg);
+                                        self.trigger_expression(PlatypusState::Happy, 2);
+                                    }
+                                    Err(e) => self.message = Some(format!("Error: {}", e)),
                                 }
-                                Err(e) => self.message = Some(format!("Error: {}", e)),
+                                self.state.update_status();
+                                self.last_refresh = Instant::now();
+                                self.input_mode = false;
+                                self.pending_args.clear();
                             }
-                            self.state.update_status();
-                            self.last_refresh = Instant::now();
                         }
                         self.message_timer = Some(Instant::now());
+                    } else if self.input_prompt == "Impact (critical/high/medium/low)?" {
+                        let impact = self.pending_args.last().cloned().unwrap_or_default();
+                        if ["critical", "high", "medium", "low"]
+                            .contains(&impact.to_lowercase().as_str())
+                        {
+                            self.pending_impact = Some(impact.to_lowercase());
+                            self.input_mode = true;
+                            self.input_prompt =
+                                "Type (feature/bugfix/refactor/docs/security)?".to_string();
+                        } else {
+                            self.message = Some(
+                                "Invalid impact. Use: critical, high, medium, or low".to_string(),
+                            );
+                            self.message_timer = Some(Instant::now());
+                            self.input_mode = false;
+                            self.pending_args.clear();
+                            self.pending_impact = None;
+                        }
+                    } else if self.input_prompt == "Type (feature/bugfix/refactor/docs/security)?" {
+                        let change_type = self.pending_args.last().cloned().unwrap_or_default();
+                        if [
+                            "feature",
+                            "bugfix",
+                            "refactor",
+                            "documentation",
+                            "docs",
+                            "security",
+                        ]
+                        .contains(&change_type.to_lowercase().as_str())
+                        {
+                            self.pending_change_type = Some(change_type.to_lowercase());
+
+                            if let Some(area) = &self.current_area.clone() {
+                                let topic_name = self.pending_args[0].clone();
+                                let full_path = match &self.state.nav_state {
+                                    NavState::TopicList(_) => topic_name.clone(),
+                                    NavState::NestedSpecs(ref path) => {
+                                        let spec_dir = crate::fs::spec_dir();
+                                        if let Ok(rel) = path.strip_prefix(spec_dir.join(area)) {
+                                            let parent = rel
+                                                .to_string_lossy()
+                                                .trim_start_matches('/')
+                                                .to_string();
+                                            format!("{}/{}", parent, topic_name)
+                                        } else {
+                                            topic_name.clone()
+                                        }
+                                    }
+                                    _ => topic_name.clone(),
+                                };
+
+                                let impact = self.pending_impact.clone();
+                                let ct = self.pending_change_type.clone();
+
+                                match crate::commands::topic::run_new_with_metadata(
+                                    &full_path,
+                                    area,
+                                    impact.as_deref(),
+                                    ct.as_deref(),
+                                ) {
+                                    Ok(msg) => {
+                                        self.message = Some(msg);
+                                        self.trigger_expression(PlatypusState::Happy, 2);
+                                    }
+                                    Err(e) => self.message = Some(format!("Error: {}", e)),
+                                }
+                                self.state.update_status();
+                                self.last_refresh = Instant::now();
+                            }
+                        } else {
+                            self.message = Some(
+                                "Invalid type. Use: feature, bugfix, refactor, docs, or security"
+                                    .to_string(),
+                            );
+                            self.message_timer = Some(Instant::now());
+                        }
                         self.input_mode = false;
                         self.pending_args.clear();
+                        self.pending_impact = None;
+                        self.pending_change_type = None;
                     } else if self.input_prompt == "Name for new area?" {
                         match crate::commands::area::run_add(&self.pending_args[0]) {
                             Ok(_) => {

@@ -4,9 +4,178 @@ use crate::commands::area;
 use crate::fs::{agent_dir, global_modes_dir};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AreaTypesConfig {
+    #[serde(default)]
+    pub roadmap: Option<AreaTypeConfig>,
+    #[serde(default)]
+    pub working: Option<AreaTypeConfig>,
+    #[serde(default)]
+    pub build: Option<AreaTypeConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AreaTypeConfig {
+    pub display_type: DisplayType,
+    #[serde(default = "default_area_spec_file")]
+    pub spec_file: String,
+    #[serde(default)]
+    pub task_file: Option<String>,
+    pub parser: ParserType,
+    #[serde(default = "default_list_fields")]
+    pub list_fields: Vec<String>,
+    #[serde(default = "default_sort_by")]
+    pub sort_by: String,
+    #[serde(default)]
+    pub impact_labels: HashMap<String, String>,
+    #[serde(default)]
+    pub change_type_labels: HashMap<String, String>,
+}
+
+fn default_area_spec_file() -> String {
+    "specs.md".to_string()
+}
+
+fn default_list_fields() -> Vec<String> {
+    vec!["title".to_string()]
+}
+
+fn default_sort_by() -> String {
+    "title".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum DisplayType {
+    #[serde(rename = "roadmap")]
+    Roadmap,
+    #[serde(rename = "working")]
+    Working,
+    #[serde(rename = "build")]
+    Build,
+    #[serde(rename = "standard")]
+    Standard,
+}
+
+impl Default for DisplayType {
+    fn default() -> Self {
+        DisplayType::Standard
+    }
+}
+
+impl DisplayType {
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "roadmap" => DisplayType::Roadmap,
+            "working" => DisplayType::Working,
+            "build" => DisplayType::Build,
+            _ => DisplayType::Standard,
+        }
+    }
+}
+
+pub fn get_impact_labels(area_type: &str) -> HashMap<String, String> {
+    let mut defaults = HashMap::new();
+    defaults.insert("critical".to_string(), "CRITICAL".to_string());
+    defaults.insert("high".to_string(), "HIGH".to_string());
+    defaults.insert("medium".to_string(), "MEDIUM".to_string());
+    defaults.insert("low".to_string(), "LOW".to_string());
+
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            let area_lower = area_type.to_lowercase();
+
+            let config_labels = if area_lower.contains("roadmap") {
+                config.area_types.roadmap.as_ref()
+            } else if area_lower.contains("build") {
+                config.area_types.build.as_ref()
+            } else if area_lower.contains("working") {
+                config.area_types.working.as_ref()
+            } else {
+                None
+            };
+
+            if let Some(area_config) = config_labels {
+                let mut labels = defaults;
+                for (key, value) in &area_config.impact_labels {
+                    labels.insert(key.to_lowercase(), value.clone());
+                }
+                return labels;
+            }
+        }
+    }
+    defaults
+}
+
+pub fn get_change_type_labels(area_type: &str) -> HashMap<String, String> {
+    let mut defaults = HashMap::new();
+    defaults.insert("feature".to_string(), "feature".to_string());
+    defaults.insert("bugfix".to_string(), "bugfix".to_string());
+    defaults.insert("bug".to_string(), "bugfix".to_string());
+    defaults.insert("refactor".to_string(), "refactor".to_string());
+    defaults.insert("refactoring".to_string(), "refactor".to_string());
+    defaults.insert("documentation".to_string(), "docs".to_string());
+    defaults.insert("docs".to_string(), "docs".to_string());
+    defaults.insert("security".to_string(), "security".to_string());
+
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            let area_lower = area_type.to_lowercase();
+
+            let config_labels = if area_lower.contains("roadmap") {
+                config.area_types.roadmap.as_ref()
+            } else if area_lower.contains("build") {
+                config.area_types.build.as_ref()
+            } else if area_lower.contains("working") {
+                config.area_types.working.as_ref()
+            } else {
+                None
+            };
+
+            if let Some(area_config) = config_labels {
+                let mut labels = defaults;
+                for (key, value) in &area_config.change_type_labels {
+                    labels.insert(key.to_lowercase(), value.clone());
+                }
+                return labels;
+            }
+        }
+    }
+    defaults
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ParserType {
+    #[serde(rename = "frontmatter")]
+    Frontmatter,
+    #[serde(rename = "tasks")]
+    Tasks,
+    #[serde(rename = "dates")]
+    Dates,
+    #[serde(rename = "standard")]
+    Standard,
+}
+
+impl Default for ParserType {
+    fn default() -> Self {
+        ParserType::Standard
+    }
+}
+
+impl ParserType {
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "frontmatter" => ParserType::Frontmatter,
+            "tasks" => ParserType::Tasks,
+            "dates" => ParserType::Dates,
+            _ => ParserType::Standard,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModeConfig {
@@ -25,6 +194,8 @@ pub struct ModeConfig {
     pub scripts: Scripts,
     #[serde(default)]
     pub templates: TemplatesConfig,
+    #[serde(default)]
+    pub area_types: AreaTypesConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

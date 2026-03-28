@@ -359,6 +359,159 @@ extends = []
 [scripts]
 pre_activate = ""
 post_activate = ""
+
+# Area Types Configuration - Define how each area type is rendered
+[area_types.roadmap]
+display_type = "roadmap"
+spec_file = "spec.md"
+parser = "frontmatter"
+list_fields = ["title", "impact", "change_type"]
+sort_by = "impact"
+
+[area_types.working]
+display_type = "working"
+spec_file = "spec.md"
+task_file = "tasks.md"
+parser = "tasks"
+list_fields = ["title", "progress", "status"]
+sort_by = "status"
+
+[area_types.build]
+display_type = "build"
+spec_file = "spec.md"
+parser = "dates"
+list_fields = ["title", "completed_date"]
+sort_by = "modified"
+```
+
+## Area Types
+
+Area types define how the TUI renders and parses specs for different areas:
+
+### Display Types
+
+| Type | Description | TUI Display |
+|------|-------------|-------------|
+| `roadmap` | Proposed items with impact levels | `[CRIT] feat Feature Name` |
+| `working` | Task-based progress | `[====    ] (3/5)` progress bar |
+| `build` | Completed specs with dates | `✅ Feature Name (2026-03-28)` |
+| `standard` | Default task-based (backwards compat) | Progress bar |
+
+### Parser Types
+
+| Type | What it reads |
+|------|---------------|
+| `frontmatter` | YAML frontmatter (impact, change_type, title) |
+| `tasks` | Markdown checkboxes (`- [ ]`, `- [-]`, `- [x]`) |
+| `dates` | Created/modified/completed dates in frontmatter |
+| `standard` | Tasks only (backwards compatible) |
+
+### Area Type Configuration
+
+```toml
+[area_types.<name>]
+display_type = "roadmap"     # How TUI renders
+spec_file = "spec.md"        # File to read for metadata
+parser = "frontmatter"       # How to parse metadata
+list_fields = ["title", "impact", "change_type"]
+sort_by = "impact"           # Default sort order
+```
+
+### Spec Frontmatter Format
+
+Specs in roadmap areas should use YAML frontmatter:
+
+```yaml
+---
+title: User Authentication
+impact: high
+change_type: feature
+status: proposed
+created: 2026-03-28
+---
+
+# User Authentication
+
+Description...
+```
+
+### Custom Classifications
+
+You can define custom impact levels and change types in mode.toml:
+
+```toml
+[area_types.roadmap]
+display_type = "roadmap"
+spec_file = "spec.md"
+parser = "frontmatter"
+
+# Custom impact labels - key is frontmatter value, value is displayed
+[area_types.roadmap.impact_labels]
+critical = "CRITICAL"
+high = "HIGH"
+medium = "MEDIUM"
+low = "LOW"
+p0 = "P0"
+p1 = "P1"
+p2 = "P2"
+
+# Custom change type labels
+[area_types.roadmap.change_type_labels]
+feature = "feature"
+bugfix = "bugfix"
+enhancement = "enhancement"
+research = "research"
+spike = "spike"
+```
+
+### Default Impact Levels
+
+| Level | Badge | TUI Color |
+|-------|-------|-----------|
+| `critical` | `[CRITICAL]` | Red |
+| `high` | `[HIGH]` | Yellow |
+| `medium` | `[MEDIUM]` | Cyan |
+| `low` | `[LOW]` | White |
+
+### Default Change Types
+
+| Type | Badge |
+|------|-------|
+| `feature` | feature |
+| `bugfix` | bugfix |
+| `refactor` | refactor |
+| `documentation` | docs |
+| `security` | security |
+
+## TUI Workflow
+
+### Creating Roadmap Items
+
+When creating a new spec in a Roadmap area, the TUI prompts for:
+
+1. **Name** - Topic name
+2. **Impact** - `critical`, `high`, `medium`, or `low` (or custom values from mode.toml)
+3. **Type** - `feature`, `bugfix`, `refactor`, `docs`, or `security` (or custom values)
+
+These are saved in the spec's frontmatter automatically.
+
+### Pushing to Build
+
+When pushing a spec to the Build area, UniSpec automatically:
+
+- Updates `status: completed`
+- Adds `modified: <date>`
+- Adds `completed: <timestamp>`
+
+The completion timestamp is displayed in the Build area TUI view.
+
+### Build Area Display
+
+Build area shows completed specs with their completion date:
+
+```
+✅ User Auth (2026-03-28 14:30:00)
+✅ API v2 (2026-03-27 09:15:00)
 ```
 
 ## Best Practices
