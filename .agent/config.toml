@@ -1,6 +1,6 @@
 area = "Working"
 protected_areas = []
-paddy_enabled = false
+paddy_enabled = true
 
 [ingest]
 auto_index = true
