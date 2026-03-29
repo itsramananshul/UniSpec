@@ -381,7 +381,7 @@ impl App {
                         .map(|a| a.to_lowercase() == "build")
                         .unwrap_or(false);
                     let move_cmd = if is_build { "Pull" } else { "Push" };
-                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | m: Master | q: Quit", move_cmd))
+                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | q: Quit", move_cmd))
                 };
                 let help_widget = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
                 f.render_widget(help_widget, if self.platypus_enabled { chunks[3] } else { chunks[2] });

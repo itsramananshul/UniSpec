@@ -1,13 +1,6 @@
-area = "Working"
+current_mode = "ingest"
 protected_areas = []
-paddy_enabled = false
+default_area = "Working"
+connectors = []
 
-[ingest]
-auto_index = false
-index_on_complete = false
-capture_functions = true
-capture_structs = true
-capture_enums = true
-capture_imports = true
-output_format = "toml"
-languages = []
+[settings.custom]
