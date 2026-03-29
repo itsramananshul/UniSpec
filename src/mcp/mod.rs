@@ -554,6 +554,14 @@ pub fn get_tools() -> Vec<Tool> {
                 "required": ["path"]
             }),
         },
+        Tool {
+            name: "master_spec".to_string(),
+            description: "Get the master spec - a high-level overview of the project for context".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
     ];
 
     // Add dynamic connector tools

@@ -1,9 +1,23 @@
 // src/commands/topic.rs
 use crate::agent::load_agent_config;
-use crate::fs::{config::load_config, ensure_dir, topic_path};
+use crate::fs::{ensure_dir, topic_path};
 use anyhow::Result;
 use std::fs;
-use std::iter::repeat;
+
+pub fn get_agent_id() -> String {
+    std::process::Command::new("git")
+        .args(["config", "--global", "user.name"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            std::env::var("USER")
+                .or_else(|_| std::env::var("USERNAME"))
+                .unwrap_or_else(|_| "unknown".to_string())
+        })
+}
 
 pub fn run_new(topic: &str, area_str: &str) -> Result<String> {
     run_new_with_metadata(topic, area_str, None, None)
@@ -137,6 +151,7 @@ pub fn run_list(area_str: &str, _show_status: bool) -> Result<()> {
 
 pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Result<String> {
     let current_config = load_agent_config()?;
+    let agent_id = get_agent_id();
     let source_area = source_area.map(String::from).unwrap_or_else(|| {
         current_config
             .default_area
@@ -144,34 +159,93 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
             .unwrap_or_else(|| "Working".to_string())
     });
 
-    if source_area == target_area {
+    // Normalize area names (case-insensitive)
+    let source_area_normalized = crate::fs::normalize_area_name(&source_area);
+    let target_area_normalized = crate::fs::normalize_area_name(target_area);
+
+    // Check if areas exist
+    if !crate::fs::area_exists(&source_area_normalized) {
         return Err(anyhow::anyhow!(
-            "❌ Source and target areas are the same: {}",
+            "❌ Source area '{}' not found.",
             source_area
         ));
     }
+    if !crate::fs::area_exists(&target_area_normalized) {
+        return Err(anyhow::anyhow!(
+            "❌ Target area '{}' not found.",
+            target_area
+        ));
+    }
 
-    let src = topic_path(topic, &source_area);
-    let dst = topic_path(topic, target_area);
+    if source_area_normalized.to_lowercase() == target_area_normalized.to_lowercase() {
+        return Err(anyhow::anyhow!(
+            "❌ Source and target areas are the same: {}",
+            source_area_normalized
+        ));
+    }
+
+    let src = topic_path(topic, &source_area_normalized);
+    let dst = topic_path(topic, &target_area_normalized);
 
     if !src.exists() {
         return Err(anyhow::anyhow!(
             "❌ Topic '{}' not found in {}.",
             topic,
-            source_area
+            source_area_normalized
         ));
+    }
+
+    let spec_filename = crate::agent::mode::get_spec_filename_for_area(&source_area_normalized);
+    let spec_path = src.join(&spec_filename);
+
+    if spec_path.exists() {
+        if let Ok(content) = fs::read_to_string(&spec_path) {
+            if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
+                if let Some(ref checked_out_by) = metadata.checked_out {
+                    if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                        return Err(anyhow::anyhow!(
+                            "❌ Topic '{}' is checked out by {}. Cannot push until checked in.",
+                            topic,
+                            checked_out_by
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if topic in destination (Build) is checked out by someone else
+    if target_area_normalized.to_lowercase() == "build" && dst.exists() {
+        let dst_spec_filename =
+            crate::agent::mode::get_spec_filename_for_area(&target_area_normalized);
+        let dst_spec_path = dst.join(&dst_spec_filename);
+        if dst_spec_path.exists() {
+            if let Ok(content) = fs::read_to_string(&dst_spec_path) {
+                if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
+                    if let Some(ref checked_out_by) = metadata.checked_out {
+                        if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                            return Err(anyhow::anyhow!(
+                                "❌ Topic '{}' is checked out in Build by {}. Cannot push until checked in.",
+                                topic,
+                                checked_out_by
+                            ));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     ensure_dir(&dst)?;
 
     // Get source and target file names from mode config
-    let src_spec = crate::agent::mode::get_spec_filename_for_area(&source_area);
-    let src_task = crate::agent::mode::get_task_filename_for_area(&source_area);
-    let src_area_file = crate::agent::mode::get_area_filename_for_area(&source_area);
+    let src_spec = crate::agent::mode::get_spec_filename_for_area(&source_area_normalized);
+    let src_task = crate::agent::mode::get_task_filename_for_area(&source_area_normalized);
+    let src_area_file = crate::agent::mode::get_area_filename_for_area(&source_area_normalized);
 
-    let dst_spec = crate::agent::mode::get_spec_filename_for_area(target_area);
-    let dst_task = crate::agent::mode::get_task_filename_for_area(target_area);
-    let dst_area_file = crate::agent::mode::get_area_filename_for_area(target_area);
+    let dst_spec = crate::agent::mode::get_spec_filename_for_area(&target_area_normalized);
+    let dst_task = crate::agent::mode::get_task_filename_for_area(&target_area_normalized);
+    let dst_area_file = crate::agent::mode::get_area_filename_for_area(&target_area_normalized);
 
     // Copy files - keep source files AND create target area files from templates
     // Only copy specs and tasks, NOT area.md (area files stay in area root)
@@ -222,7 +296,7 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
             let mut content: String;
 
             // Check if pushing to Build and it's a spec file
-            let is_build = target_area.to_lowercase() == "build";
+            let is_build = target_area_normalized.to_lowercase() == "build";
 
             if is_build && is_spec_file {
                 // Read source file and add completion metadata
@@ -236,16 +310,51 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
         }
     }
 
-    let completed_info = if target_area.to_lowercase() == "build" {
+    let completed_info = if target_area_normalized.to_lowercase() == "build" {
         let today = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         format!(" (completed: {})", today)
     } else {
         String::new()
     };
 
+    let checkin_msg = if source_area_normalized.to_lowercase() == "working"
+        && target_area_normalized.to_lowercase() == "build"
+    {
+        auto_checkin(topic, &source_area_normalized)?
+    } else {
+        String::new()
+    };
+
+    // Move: copy to destination, then remove source
+    let move_msg = if source_area_normalized.to_lowercase() != "build" {
+        // Only move from non-Build areas. Build items stay (they're shipped).
+        if source_area_normalized.to_lowercase() != "build" {
+            // Copy completed, now remove source
+            fs::remove_dir_all(&src)?;
+            format!(" (moved from {})", source_area_normalized)
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     Ok(format!(
-        "✅ Pushed '{}' from {} → {}{}",
-        topic, source_area, target_area, completed_info
+        "✅ Moved '{}' from {} → {}{}{}{}",
+        topic,
+        source_area_normalized,
+        target_area_normalized,
+        completed_info,
+        if checkin_msg.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", checkin_msg)
+        },
+        if move_msg.is_empty() {
+            String::new()
+        } else {
+            move_msg
+        }
     ))
 }
 
@@ -325,20 +434,58 @@ fn add_completion_metadata(content: &str, completed_date: &str) -> String {
 }
 
 pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {
+    let agent_id = get_agent_id();
     let current_config = load_agent_config()?;
     let target_area = current_config
         .default_area
         .unwrap_or_else(|| "Working".to_string());
 
-    let src = topic_path(topic, source_area);
-    let dst = topic_path(topic, &target_area);
+    // Check if areas exist
+    if !crate::fs::area_exists(source_area) {
+        return Err(anyhow::anyhow!(
+            "❌ Source area '{}' not found.",
+            source_area
+        ));
+    }
+    if !crate::fs::area_exists(&target_area) {
+        return Err(anyhow::anyhow!(
+            "❌ Target area '{}' not found.",
+            target_area
+        ));
+    }
+
+    // Normalize area names (case-insensitive)
+    let source_area_normalized = crate::fs::normalize_area_name(source_area);
+    let target_area_normalized = crate::fs::normalize_area_name(&target_area);
+
+    let src = topic_path(topic, &source_area_normalized);
+    let dst = topic_path(topic, &target_area_normalized);
 
     if !src.exists() {
         return Err(anyhow::anyhow!(
             "❌ Topic '{}' not found in {}.",
             topic,
-            source_area
+            source_area_normalized
         ));
+    }
+
+    let spec_filename = crate::agent::mode::get_spec_filename_for_area(&source_area_normalized);
+    let spec_path = src.join(&spec_filename);
+
+    if spec_path.exists() {
+        if let Ok(content) = fs::read_to_string(&spec_path) {
+            if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
+                if let Some(ref checked_out_by) = metadata.checked_out {
+                    if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                        return Err(anyhow::anyhow!(
+                            "❌ Topic '{}' is checked out by {}. Cannot pull until checked in.",
+                            topic,
+                            checked_out_by
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     if dst.exists() {
@@ -348,13 +495,13 @@ pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {
     ensure_dir(&dst)?;
 
     // Get source and target file names from mode config
-    let src_spec = crate::agent::mode::get_spec_filename_for_area(source_area);
-    let src_task = crate::agent::mode::get_task_filename_for_area(source_area);
-    let src_area_file = crate::agent::mode::get_area_filename_for_area(source_area);
+    let src_spec = crate::agent::mode::get_spec_filename_for_area(&source_area_normalized);
+    let src_task = crate::agent::mode::get_task_filename_for_area(&source_area_normalized);
+    let src_area_file = crate::agent::mode::get_area_filename_for_area(&source_area_normalized);
 
-    let dst_spec = crate::agent::mode::get_spec_filename_for_area(&target_area);
-    let dst_task = crate::agent::mode::get_task_filename_for_area(&target_area);
-    let dst_area_file = crate::agent::mode::get_area_filename_for_area(&target_area);
+    let dst_spec = crate::agent::mode::get_spec_filename_for_area(&target_area_normalized);
+    let dst_task = crate::agent::mode::get_task_filename_for_area(&target_area_normalized);
+    let dst_area_file = crate::agent::mode::get_area_filename_for_area(&target_area_normalized);
 
     // Copy files - keep source files and create target area files from templates
     // Only copy specs and tasks, NOT area.md
@@ -369,9 +516,22 @@ pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {
         }
 
         // First, copy with original filename (keep source area files)
+        // Strip checkout metadata from spec files
         let orig_dest = dst.join(&filename);
         if path.is_file() {
-            fs::copy(&path, &orig_dest)?;
+            let is_spec_file = filename == src_spec
+                || filename.ends_with("_spec.md")
+                || filename.ends_with("_specs.md")
+                || filename == "spec.md"
+                || filename == "specs.md";
+
+            if is_spec_file {
+                let content = fs::read_to_string(&path)?;
+                let clean_content = crate::fs::spec::strip_checkout_metadata(&content);
+                fs::write(&orig_dest, &clean_content)?;
+            } else {
+                fs::copy(&path, &orig_dest)?;
+            }
         } else if path.is_dir() {
             copy_dir_recursive(&path, &orig_dest)?;
         }
@@ -390,9 +550,9 @@ pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {
             let target_dest = dst.join(&target_filename);
             // Read template for target area
             let template_content = if filename == src_spec {
-                crate::fs::read_area_template(&target_area, "specs.md")
+                crate::fs::read_area_template(&target_area_normalized, "specs.md")
             } else if filename == src_task {
-                crate::fs::read_area_template(&target_area, "tasks.md")
+                crate::fs::read_area_template(&target_area_normalized, "tasks.md")
             } else {
                 None
             };
@@ -400,15 +560,194 @@ pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {
             if let Some(content) = template_content {
                 fs::write(&target_dest, &content)?;
             } else if path.is_file() {
-                fs::copy(&path, &target_dest)?;
+                // Strip checkout metadata from copied spec files
+                let content = fs::read_to_string(&path)?;
+                let clean_content = crate::fs::spec::strip_checkout_metadata(&content);
+                fs::write(&target_dest, &clean_content)?;
             }
         }
     }
 
+    let checkout_msg = if source_area_normalized.to_lowercase() == "build" {
+        auto_checkout(topic, &source_area_normalized)?
+    } else {
+        String::new()
+    };
+
+    let ancestor_msg = pull_ancestors(topic, &source_area_normalized, &target_area_normalized)?;
+
     Ok(format!(
-        "✅ Pulled topic '{}' from {} to {}",
-        topic, source_area, target_area
+        "✅ Moved topic '{}' from {} → {}{}{}",
+        topic,
+        source_area_normalized,
+        target_area_normalized,
+        if checkout_msg.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", checkout_msg)
+        },
+        if ancestor_msg.is_empty() {
+            String::new()
+        } else {
+            ancestor_msg
+        }
     ))
+}
+
+pub fn pull_ancestors(topic: &str, source_area: &str, target_area: &str) -> Result<String> {
+    let parts: Vec<&str> = topic.split('/').collect();
+    let mut results = vec![];
+
+    let mut current_path = String::new();
+    for (i, part) in parts.iter().enumerate() {
+        if i > 0 {
+            current_path.push('/');
+        }
+        current_path.push_str(part);
+
+        if current_path == topic {
+            continue;
+        }
+
+        let src = topic_path(&current_path, source_area);
+        if src.exists() {
+            let agent_id = get_agent_id();
+
+            let spec_filename = crate::agent::mode::get_spec_filename_for_area(source_area);
+            let spec_path = src.join(&spec_filename);
+
+            if spec_path.exists() {
+                if let Ok(content) = fs::read_to_string(&spec_path) {
+                    if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
+                        if let Some(ref checked_out_by) = metadata.checked_out {
+                            if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            match pull_single_topic(&current_path, source_area, target_area, false) {
+                Ok(msg) => results.push(format!("  - {}", msg.trim())),
+                Err(e) => {
+                    results.push(format!("  - {} (skipped: {})", current_path, e));
+                }
+            }
+        }
+    }
+
+    if results.is_empty() {
+        Ok(String::new())
+    } else {
+        Ok(format!("\nAncestors also pulled:\n{}", results.join("\n")))
+    }
+}
+
+fn pull_single_topic(
+    topic: &str,
+    source_area: &str,
+    target_area: &str,
+    auto_checkout: bool,
+) -> Result<String> {
+    let src = topic_path(topic, source_area);
+    let dst = topic_path(topic, target_area);
+
+    if !src.exists() {
+        return Err(anyhow::anyhow!(
+            "Topic '{}' not found in {}",
+            topic,
+            source_area
+        ));
+    }
+
+    if dst.exists() {
+        fs::remove_dir_all(&dst)?;
+    }
+
+    ensure_dir(&dst)?;
+
+    let src_spec = crate::agent::mode::get_spec_filename_for_area(source_area);
+    let src_task = crate::agent::mode::get_task_filename_for_area(source_area);
+
+    let dst_spec = crate::agent::mode::get_spec_filename_for_area(target_area);
+    let dst_task = crate::agent::mode::get_task_filename_for_area(target_area);
+
+    for entry in fs::read_dir(&src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let filename = entry.file_name().to_string_lossy().to_string();
+
+        if filename == "area.md" || filename.ends_with("_area.md") {
+            continue;
+        }
+
+        let orig_dest = dst.join(&filename);
+        if path.is_file() {
+            // Strip checkout metadata from spec files
+            let is_spec_file = filename == src_spec
+                || filename.ends_with("_spec.md")
+                || filename.ends_with("_specs.md")
+                || filename == "spec.md"
+                || filename == "specs.md";
+
+            if is_spec_file {
+                let content = fs::read_to_string(&path)?;
+                let clean_content = crate::fs::spec::strip_checkout_metadata(&content);
+                fs::write(&orig_dest, &clean_content)?;
+            } else {
+                fs::copy(&path, &orig_dest)?;
+            }
+        } else if path.is_dir() {
+            copy_dir_recursive(&path, &orig_dest)?;
+        }
+
+        let target_filename = if filename == src_spec {
+            dst_spec.clone()
+        } else if filename == src_task {
+            dst_task.clone()
+        } else {
+            continue;
+        };
+
+        if target_filename != filename {
+            let target_dest = dst.join(&target_filename);
+            let template_content = if filename == src_spec {
+                crate::fs::read_area_template(target_area, "specs.md")
+            } else if filename == src_task {
+                crate::fs::read_area_template(target_area, "tasks.md")
+            } else {
+                None
+            };
+
+            if let Some(content) = template_content {
+                fs::write(&target_dest, &content)?;
+            } else if path.is_file() {
+                // Strip checkout metadata from copied spec files
+                let content = fs::read_to_string(&path)?;
+                let clean_content = crate::fs::spec::strip_checkout_metadata(&content);
+                fs::write(&target_dest, &clean_content)?;
+            }
+        }
+    }
+
+    if auto_checkout && source_area.to_lowercase() == "build" {
+        let spec_filename = crate::agent::mode::get_spec_filename_for_area(source_area);
+        let spec_path = src.join(&spec_filename);
+        if spec_path.exists() {
+            let content = fs::read_to_string(&spec_path)?;
+            let agent_id = get_agent_id();
+            let new_content = crate::fs::spec::update_spec_with_checkout(&content, &agent_id, true);
+            fs::write(&spec_path, &new_content)?;
+        }
+    }
+
+    // Move: copy completed, now remove source (except Build)
+    if source_area.to_lowercase() != "build" {
+        fs::remove_dir_all(&src)?;
+    }
+
+    Ok(format!("Moved '{}'", topic))
 }
 
 fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
@@ -424,6 +763,250 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
         }
     }
     Ok(())
+}
+
+pub fn run_checkout(topic: &str, area: &str) -> Result<String> {
+    // Checkout only allowed from Build area
+    if area.to_lowercase() != "build" {
+        return Err(anyhow::anyhow!(
+            "❌ Checkout is only allowed from Build area. Topic '{}' is in {}.",
+            topic,
+            area
+        ));
+    }
+
+    let agent_id = get_agent_id();
+    let src_path = topic_path(topic, area);
+
+    if !src_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Topic '{}' not found in {}.",
+            topic,
+            area
+        ));
+    }
+
+    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+    let spec_path = src_path.join(&spec_filename);
+
+    if !spec_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Spec file not found for topic '{}'.",
+            topic
+        ));
+    }
+
+    let content = fs::read_to_string(&spec_path)?;
+    let metadata = crate::fs::spec::parse_spec_metadata(&content);
+
+    if let Some(ref m) = metadata {
+        if let Some(ref checked_out_by) = m.checked_out {
+            if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                return Err(anyhow::anyhow!(
+                    "❌ Topic '{}' is already checked out by {}. Cannot checkout until checked in.",
+                    topic,
+                    checked_out_by
+                ));
+            }
+        }
+    }
+
+    let new_content = crate::fs::spec::update_spec_with_checkout(&content, &agent_id, true);
+    fs::write(&spec_path, &new_content)?;
+
+    let target_area = "Working";
+    let dst = topic_path(topic, target_area);
+
+    if !dst.exists() {
+        ensure_dir(&dst)?;
+        for entry in fs::read_dir(&src_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            let filename = entry.file_name().to_string_lossy().to_string();
+
+            if filename == "area.md" || filename.ends_with("_area.md") {
+                continue;
+            }
+
+            if path.is_file() {
+                fs::copy(&path, &dst.join(&filename))?;
+            } else if path.is_dir() {
+                copy_dir_recursive(&path, &dst.join(entry.file_name()))?;
+            }
+        }
+    }
+
+    Ok(format!(
+        "✅ Checked out '{}' from {} and moved to Working.\n   Use /build {} to start working.",
+        topic, area, topic
+    ))
+}
+
+pub fn run_checkin(topic: &str, source_area: &str) -> Result<String> {
+    let agent_id = get_agent_id();
+    let src_path = topic_path(topic, source_area);
+
+    if !src_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Topic '{}' not found in {}.",
+            topic,
+            source_area
+        ));
+    }
+
+    let spec_filename = crate::agent::mode::get_spec_filename_for_area(source_area);
+    let spec_path = src_path.join(&spec_filename);
+
+    if !spec_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Spec file not found for topic '{}'.",
+            topic
+        ));
+    }
+
+    let content = fs::read_to_string(&spec_path)?;
+    let metadata = crate::fs::spec::parse_spec_metadata(&content);
+
+    if let Some(ref m) = metadata {
+        if let Some(ref checked_out_by) = m.checked_out {
+            if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                return Err(anyhow::anyhow!(
+                    "❌ Topic '{}' is checked out by {}, not by this agent.",
+                    topic,
+                    checked_out_by
+                ));
+            }
+        }
+    }
+
+    let new_content = crate::fs::spec::update_spec_with_checkout(&content, &agent_id, false);
+    fs::write(&spec_path, &new_content)?;
+
+    let dst = topic_path(topic, "Build");
+    if !dst.exists() {
+        ensure_dir(&dst)?;
+        for entry in fs::read_dir(&src_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            let filename = entry.file_name().to_string_lossy().to_string();
+
+            if filename == "area.md" || filename.ends_with("_area.md") {
+                continue;
+            }
+
+            if path.is_file() {
+                fs::copy(&path, &dst.join(&filename))?;
+            } else if path.is_dir() {
+                copy_dir_recursive(&path, &dst.join(entry.file_name()))?;
+            }
+        }
+    }
+
+    Ok(format!(
+        "✅ Checked in '{}' from {} and pushed to Build.",
+        topic, source_area
+    ))
+}
+
+pub fn auto_checkout(topic: &str, area: &str) -> Result<String> {
+    // Checkout only allowed from Build area
+    if area.to_lowercase() != "build" {
+        return Err(anyhow::anyhow!(
+            "❌ Checkout is only allowed from Build area. Topic '{}' is in {}.",
+            topic,
+            area
+        ));
+    }
+
+    let agent_id = get_agent_id();
+    let src_path = topic_path(topic, area);
+
+    if !src_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Topic '{}' not found in {}.",
+            topic,
+            area
+        ));
+    }
+
+    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+    let spec_path = src_path.join(&spec_filename);
+
+    if !spec_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Spec file not found for topic '{}'.",
+            topic
+        ));
+    }
+
+    let content = fs::read_to_string(&spec_path)?;
+    let metadata = crate::fs::spec::parse_spec_metadata(&content);
+
+    if let Some(ref m) = metadata {
+        if let Some(ref checked_out_by) = m.checked_out {
+            if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                return Err(anyhow::anyhow!(
+                    "❌ Topic '{}' is checked out by {}. Cannot pull until checked back in.",
+                    topic,
+                    checked_out_by
+                ));
+            }
+        }
+    }
+
+    let new_content = crate::fs::spec::update_spec_with_checkout(&content, &agent_id, true);
+    fs::write(&spec_path, &new_content)?;
+
+    Ok(format!(
+        "✅ Auto-checked out '{}' from {} (pulled to Working)",
+        topic, area
+    ))
+}
+
+pub fn auto_checkin(topic: &str, area: &str) -> Result<String> {
+    let agent_id = get_agent_id();
+    let src_path = topic_path(topic, area);
+
+    if !src_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Topic '{}' not found in {}.",
+            topic,
+            area
+        ));
+    }
+
+    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+    let spec_path = src_path.join(&spec_filename);
+
+    if !spec_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Spec file not found for topic '{}'.",
+            topic
+        ));
+    }
+
+    let content = fs::read_to_string(&spec_path)?;
+    let metadata = crate::fs::spec::parse_spec_metadata(&content);
+
+    if let Some(ref m) = metadata {
+        if let Some(ref checked_out_by) = m.checked_out {
+            if !checked_out_by.is_empty() && checked_out_by != &agent_id {
+                return Err(anyhow::anyhow!(
+                    "❌ Topic '{}' is checked out by {}, not by this agent. Cannot push.",
+                    topic,
+                    checked_out_by
+                ));
+            }
+        }
+    }
+
+    let new_content = crate::fs::spec::update_spec_with_checkout(&content, &agent_id, false);
+    fs::write(&spec_path, &new_content)?;
+
+    Ok(format!(
+        "✅ Auto-checked in '{}' (pushed to {})",
+        topic, area
+    ))
 }
 
 pub fn run_delete(topic: &str, area: &str, _force: bool) -> Result<String> {
@@ -679,4 +1262,79 @@ fn show_topic_current_area(
 
     println!("\nStatus: {}", status);
     Ok(())
+}
+
+pub fn run_order(area: &str) -> Result<String> {
+    let order = crate::agent::mode::get_topic_order(area);
+
+    if order.is_empty() {
+        return Ok(format!(
+            "No custom order defined for {}. Topics will be sorted alphabetically.",
+            area
+        ));
+    }
+
+    let content: String = order
+        .iter()
+        .enumerate()
+        .map(|(i, t)| format!("{}. {}", i + 1, t))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(content)
+}
+
+pub fn run_order_add(area: &str, topics: Vec<String>, position: Option<usize>) -> Result<String> {
+    crate::agent::mode::add_to_topic_order(area, topics.clone(), position)?;
+
+    let order = crate::agent::mode::get_topic_order(area);
+    let order_content: String = order
+        .iter()
+        .enumerate()
+        .map(|(i, t)| format!("{}. {}", i + 1, t))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let pos_info = if let Some(p) = position {
+        format!(" at position {}", p + 1)
+    } else {
+        String::new()
+    };
+
+    Ok(format!(
+        "✅ Added {} topic(s) to {} order{}.\n\nCurrent order:\n{}",
+        topics.len(),
+        area,
+        pos_info,
+        order_content
+    ))
+}
+
+pub fn run_order_remove(area: &str, topics: Vec<String>) -> Result<String> {
+    crate::agent::mode::remove_from_topic_order(area, topics.clone())?;
+
+    let order = crate::agent::mode::get_topic_order(area);
+    let order_content: String = if order.is_empty() {
+        "(alphabetical)".to_string()
+    } else {
+        order
+            .iter()
+            .enumerate()
+            .map(|(i, t)| format!("{}. {}", i + 1, t))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    Ok(format!(
+        "✅ Removed {} topic(s) from {} order.\n\nCurrent order:\n{}",
+        topics.len(),
+        area,
+        order_content
+    ))
+}
+
+pub fn run_order_reset(area: &str) -> Result<String> {
+    crate::agent::mode::reset_topic_order(area)?;
+
+    Ok(format!("✅ Reset {} order to alphabetical.", area))
 }

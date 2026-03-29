@@ -1,9 +1,9 @@
 area = "Working"
 protected_areas = []
-paddy_enabled = true
+paddy_enabled = false
 
 [ingest]
-auto_index = true
+auto_index = false
 index_on_complete = false
 capture_functions = true
 capture_structs = true

@@ -181,6 +181,12 @@ pub enum Commands {
         /// Project directory to run MCP server for
         path: Option<PathBuf>,
     },
+    /// View the master spec
+    Spec {
+        /// Show master spec (default)
+        #[arg(default_value = "master")]
+        name: Option<String>,
+    },
     /// Agent mode commands
     #[command(subcommand)]
     Mode(ModeCommands),
@@ -313,6 +319,33 @@ pub enum AreaCommands {
     },
     /// Show area health (topic counts by status)
     Health,
+    /// Manage area order in the TUI
+    Order {
+        /// Subcommand for order management
+        #[command(subcommand)]
+        action: AreaOrderCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AreaOrderCommands {
+    /// Show current area order
+    Show,
+    /// Add areas to the order
+    Add {
+        /// Area names to add
+        areas: Vec<String>,
+        /// Position to insert at (0-based index, default: end)
+        #[arg(short, long)]
+        position: Option<usize>,
+    },
+    /// Remove areas from the order
+    Remove {
+        /// Area names to remove
+        areas: Vec<String>,
+    },
+    /// Reset order to default (no custom order)
+    Reset,
 }
 
 #[derive(Subcommand)]
@@ -373,6 +406,47 @@ pub enum TopicCommands {
     /// Show progress across all topics
     Progress {
         /// Area to show progress for (default: current area)
+        #[arg(short, long)]
+        area: Option<String>,
+    },
+    /// Manage topic order in an area
+    Order {
+        /// Subcommand for order management
+        #[command(subcommand)]
+        action: OrderCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum OrderCommands {
+    /// Show current order
+    Show {
+        /// Area to show order for (default: current area)
+        #[arg(short, long)]
+        area: Option<String>,
+    },
+    /// Add topics to the order
+    Add {
+        /// Area to add topics to (default: current area)
+        #[arg(short, long)]
+        area: Option<String>,
+        /// Topic names to add
+        topics: Vec<String>,
+        /// Position to insert at (0-based index, default: end)
+        #[arg(short, long)]
+        position: Option<usize>,
+    },
+    /// Remove topics from the order
+    Remove {
+        /// Area to remove topics from (default: current area)
+        #[arg(short, long)]
+        area: Option<String>,
+        /// Topic names to remove
+        topics: Vec<String>,
+    },
+    /// Reset order to alphabetical
+    Reset {
+        /// Area to reset (default: current area)
         #[arg(short, long)]
         area: Option<String>,
     },

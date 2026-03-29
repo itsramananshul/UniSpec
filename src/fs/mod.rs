@@ -196,7 +196,47 @@ pub fn list_areas() -> Result<Vec<String>> {
 }
 
 pub fn area_exists(area: &str) -> bool {
-    spec_dir().join(area).join("area.md").exists()
+    let spec_dir = spec_dir();
+
+    // First try exact match
+    if spec_dir.join(area).join("area.md").exists() {
+        return true;
+    }
+
+    // Case-insensitive search
+    if let Ok(entries) = std::fs::read_dir(&spec_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.to_lowercase() == area.to_lowercase() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+pub fn normalize_area_name(area: &str) -> String {
+    let spec_dir = spec_dir();
+
+    // First try exact match
+    if spec_dir.join(area).join("area.md").exists() {
+        return area.to_string();
+    }
+
+    // Case-insensitive search
+    if let Ok(entries) = std::fs::read_dir(&spec_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.to_lowercase() == area.to_lowercase() {
+                    return name;
+                }
+            }
+        }
+    }
+    area.to_string()
 }
 
 pub fn rename_area(old: &str, new: &str) -> Result<()> {

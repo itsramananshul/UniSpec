@@ -1,310 +1,412 @@
-# UniSpec Agent Skill
+# UniSpec Skill
 
-This is the core UniSpec knowledge base. It covers how the framework works, MCP tools, and universal best practices. This file should not change - it applies to all UniSpec projects.
-
----
-
-## Part 1: How UniSpec Works
-
-### The Core Principle
-
-**The spec is the contract.** It is the single source of truth that defines what problem is solved, what requirements must be met, and what "done" means.
-
-Before writing code: read the spec. Before changing code: update the spec.
-
-### The Three Areas
-
-Areas are containers for work. They represent stages of completion.
-
-| Area | Meaning | Shows |
-|------|---------|--------|
-| **Roadmap** | What might be needed | Proposal with type and severity |
-| **Working** | Currently being built | Task progress bars |
-| **Build** | Complete and shippable | Completion dates |
-
-### The Work Flow
-
-```
-Roadmap ──→ Working ──→ Build
-   │            │            │
-   ▼            ▼            ▼
- Propose    Implement    Shipped
-```
-
-Work moves **forward** through areas. When a topic is done in Working, push to Build.
-
-### Topics
-
-A topic is a unit of work. It contains:
-- `spec.md` or `specs.md` - The specification
-- `tasks.md` - Implementation checklist
+UniSpec is a structured development system that enforces quality through a deliberate pipeline. No cutting corners.
 
 ---
 
-## Part 2: MCP Tools
+## The Vision
 
-These tools let you query and modify specs, index, and code analysis. **Use these tools - don't guess.**
+Software development fails when we skip steps. We write code before we understand the problem. We skip tests because we're "done". We ship bugs because we didn't think it through.
+
+**UniSpec fixes this by making the steps unavoidable.**
+
+Every feature flows through a pipeline:
+```
+Roadmap → Spec → Working → Testing → Debugging → Build
+```
+
+Each area has rules. You can't skip areas. You can't skip tests. The system enforces quality.
+
+---
+
+## Philosophy
+
+### 1. Think Before You Build
+
+Before writing code, you must understand:
+- What problem are you solving?
+- Who has this problem?
+- How do you know you solved it?
+
+If you can't answer these, go back to Spec.
+
+### 2. Spec is the Contract
+
+When you're in Working, the spec is law. Don't modify it. If you find problems, push back to Spec and discuss.
+
+The spec protects both you and the project:
+- You know exactly what to build
+- The project knows what to expect
+
+### 3. Tests Are Requirements
+
+A feature isn't done until tests pass. Not "mostly working". Not "works on my machine". Tests pass.
+
+If tests fail, you're not done. Simple as that.
+
+### 4. No Shortcuts
+
+You can go faster by skipping steps. You'll regret it later. UniSpec makes skipping hard.
+
+The pipeline exists for a reason. Trust it.
+
+### 5. Build is Sacred
+
+Build contains shipped work. Treat it with respect. You can pull from Build if needed, but the default is forward motion.
+
+---
+
+## The Areas
+
+### Roadmap
+Ideas. Big picture. What to build.
+
+**Think about:** What problem? Who benefits? Why does it matter?
+
+**Don't do:** Write code. That's Working's job.
+
+### Spec
+Define what you're building. Make it testable.
+
+**Include:**
+- Problem statement
+- User stories
+- Acceptance criteria (testable!)
+- Examples
+
+**Output:** A spec that you could hand to someone and they could build it correctly.
+
+### Working
+Build the thing. Follow the spec.
+
+**Rules:**
+- Don't modify the spec
+- If you find issues, document them and push back to Spec
+- Mark progress in tasks.md
+
+**Output:** Working code that implements the spec.
+
+### Testing
+Run tests. Verify everything works.
+
+**Rules:**
+- All tests pass → Push to Build
+- Tests fail → Go to Debugging
+
+### Debugging
+Tests failed. Find out why. Fix it.
+
+**Process:**
+1. Read the error (it tells you what's wrong)
+2. Find the root cause
+3. Fix it
+4. Back to Testing
+
+### Build
+Done. Shipped. Complete.
+
+**Rules:**
+- Only push here if tests pass
+- You can pull back if you find bugs
+- Push to other areas is locked for checked-out topics
+
+---
+
+## Commands
 
 ### Topic Management
 
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `topics_list` | `area` | List all topics in an area |
-| `topics_show` | `topic`, `area`, `from`, `all` | Show topic content and files |
-| `topics_add` | `topic`, `area` | Create a new topic |
-| `topics_delete` | `topic`, `area`, `force` | Delete a topic |
-| `topics_push` | `topic`, `target`, `from` | Move topic to another area |
-| `topics_pull` | `topic`, `source` | Pull topic from another area |
-| `topics_progress` | `area` | Show completion statistics |
+```bash
+# List topics in an area
+unispec topic list --area Working
 
-### Area Management
+# Create new topic
+unispec topic add my-feature --area Roadmap
 
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `areas_list` | - | List all areas |
-| `areas_add` | `name` | Create a new area |
-| `areas_remove` | `name` | Remove an area |
-| `areas_rename` | `old`, `new` | Rename an area |
-| `areas_default` | `name` | Set default area |
-| `areas_health` | - | Show area health statistics |
+# Push topic to another area (moves it)
+unispec topic push my-feature --to Spec --from Roadmap
 
-### Index (Code ↔ Spec Links)
+# Pull topic from another area
+unispec topic pull my-feature --from Build
 
-The index connects specs to code files. Use to find what code implements what.
+# Show topic details
+unispec topic show my-feature
 
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `index_list` | `topic`, `area`, `path`, `tag` | List files linked to topic |
-| `index_add` | `topic`, `area`, `path`, `link_type`, `tags`, `annotation` | Link file to topic |
-| `index_remove` | `topic`, `path` | Remove a link |
-| `index_find` | `query`, `by` | Find links by topic/path/tag/annotation |
-| `index_cleanup` | - | Remove orphaned links |
-| `index_tags` | - | List all unique tags |
-| `index_graph` | - | Export index as graph JSON |
-| `index_backlinks` | `topic` | Generate backlinks markdown |
-| `index_exports` | `topic` | List exports (functions, classes) for topic |
-| `index_query` | `query`, `by` | Query exports by name/type/description/ID |
-| `index_depends` | `topic` | Find what topics depend on this topic |
-| `index_lookup` | `id` | Find export by full ID (e.g., `user-login:login_user`) |
+# Delete topic
+unispec topic remove my-feature
+```
+
+### Areas
+
+```bash
+# List areas
+unispec area list
+
+# Create area
+unispec area add InReview
+
+# Show area health
+unispec area health
+```
+
+### Index (Code Navigation)
+
+```bash
+# Add file to topic index
+unispec index add --topic my-feature --path src/auth.rs
+
+# List files in topic
+unispec index list --topic my-feature
+
+# Find file by pattern
+unispec index find "auth"
+
+# Show topic exports (functions, structs)
+unispec index exports my-feature
+```
 
 ### Code Analysis
 
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `code_analysis` | `topic`, `area`, `module`, `item_type`, `pattern` | Query already-ingested code |
-| `code_parse` | `path`, `language`, `item_type`, `pattern` | Parse file on-demand with tree-sitter |
+```bash
+# Parse code structure
+unispec parse file src/auth.rs --pattern functions
 
-### Mode Management
-
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `mode_list` | - | List all available modes |
-| `mode_info` | `name` | Get detailed info about a mode |
-| `mode_activate` | `name` | Activate an agent mode |
-| `mode_current` | - | Get current active mode |
-
-### Configuration
-
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `config_get` | - | Get current configuration |
-| `config_set` | `area` | Set default area |
-
-### Connectors
-
-| Tool | Arguments | Description |
-|------|-----------|-------------|
-| `connector_list` | - | List all available connectors |
-| `connector_run` | `name`, `args` | Run a connector command |
-
----
-
-## Part 3: How to Query
-
-### Before implementing, query existing data:
-
-1. **Find specs**: `topics_list(area="Roadmap")`
-2. **Read spec**: `topics_show(topic, area="Roadmap")`
-3. **Find code**: `index_find(query)` or `code_parse(path, pattern)`
-4. **Check exports**: `index_exports(topic)` - find functions available
-
-### When linking code:
-
-```
-index_add(topic, path, tags, annotation)
+# Get code analysis for topic
+unispec code-analysis my-feature
 ```
 
-### When referencing other topics' code:
+### Ingest
 
-```python
-# Include reference comment for tracking
-from auth import login_user  # ref:index:user-login:login_user
+```bash
+# Ingest codebase
+unispec ingest run --topic my-feature
+
+# Watch mode
+unispec ingest run --watch
 ```
 
 ---
 
-## Part 4: Frontmatter
+## Workflows
 
-Specs support YAML frontmatter for metadata:
+### Feature Development
 
-```yaml
+1. **Roadmap** - Create topic, add plan
+2. **Spec** - Write detailed spec, make it testable
+3. **Working** - Implement, follow the spec
+4. **Testing** - Run tests, fix failures
+5. **Debugging** - If tests fail, debug
+6. **Build** - When tests pass, ship it
+
+### Bug Fixes
+
+1. **Roadmap** - Document the bug
+2. **Spec** - Define what "fixed" looks like
+3. **Working** - Fix the code
+4. **Testing** - Verify tests pass
+5. **Build** - Ship the fix
+
+### Refactoring
+
+1. **Roadmap** - Explain why refactoring is needed
+2. **Spec** - Define the target structure
+3. **Working** - Transform the code
+4. **Testing** - Ensure behavior unchanged
+5. **Build** - Ship the refactor
+
+---
+
+## Nested Topics
+
+Topics can be nested with `/`:
+
+```
+Roadmap/
+├── user-auth/
+│   └── login/
+│       └── oauth/
+```
+
+When you pull a nested topic, ancestors are pulled too:
+
+```
+Pull: user-auth/login/oauth
+Result:
+  - Pulls: user-auth/login/oauth
+  - Also pulls: user-auth/login (if exists)
+  - Also pulls: user-auth (if exists)
+```
+
+This gives you context from parent specs.
+
+---
+
+## Checkout System
+
+Topics in Build can be checked out for fixes:
+
+- **Pull from Build** → Topic moves to Working, marked as checked out by you
+- **Push to Build** → Topic moves back, checkout cleared
+- **Checked out by others** → You can't push/pull until they check in
+
+The checkout prevents conflicts. Only one person works on a topic at a time.
+
+---
+
+## Writing Good Specs
+
+A spec should answer:
+
+1. **What problem does this solve?**
+2. **Who has this problem?**
+3. **What does success look like?**
+4. **What are the edge cases?**
+5. **How do we verify it works?**
+
+### Template
+
+```markdown
 ---
 title: Feature Name
-impact: high           # critical, high, medium, low
-change_type: feature   # feature, bugfix, refactor, docs, security
-status: proposed      # proposed, in_progress, completed
-created: 2026-03-28
-completed: 2026-03-28  # Added when pushed to Build
----
-```
-
+impact: high
+change_type: feature
 ---
 
-## Part 5: Task Syntax
+## Problem
 
-Tasks track implementation progress. Use checkboxes:
+What problem does this solve?
 
-```markdown
-## Tasks
+## Users
 
-### Phase 1
-- [ ] Not started task
-- [-] Task in progress
-- [x] Completed task
-```
+Who has this problem?
 
-| Marker | Meaning |
-|--------|---------|
-| `[ ]` | Not started |
-| `[-]` | In progress |
-| `[x]` | Done |
+## Solution
 
-Mark tasks as you work. This keeps progress visible.
-
----
-
-## Part 6: Spec Structure
-
-A spec answers three questions:
-
-1. **Problem** - What problem does this solve?
-2. **Requirements** - What must be true?
-3. **Acceptance** - How do we know it's done?
-
-```markdown
-## Problem Statement
-
-Users cannot authenticate, exposing data to unauthorized access.
+What are we building?
 
 ## Requirements
 
-- [ ] Email/password login
-- [ ] Session management
+### Must Have
+- [ ] Requirement 1
+- [ ] Requirement 2
+
+### Should Have
+- [ ] Nice to have
+
+### Won't Have
+- Out of scope
 
 ## Acceptance Criteria
 
-- [ ] User can login with valid credentials
-- [ ] Invalid credentials show error
+- [ ] Criterion 1
+- [ ] Criterion 2
+
+## Examples
+
+**Input:** X
+**Output:** Y
+
+**Input:** A
+**Output:** B
+
+## Edge Cases
+
+- What happens if X?
+- What happens if Y?
 ```
 
 ---
 
-## Part 7: Ingest & Parse
+## Writing Tests
 
-### Ingest a codebase
+Tests verify your code works. Write them alongside code.
 
-```bash
-unispec ingest run ./src -a Ingested -t project-name
+### Test Structure
+
+```markdown
+## Tests
+
+### Should do X
+- Given: A and B
+- When: I do C
+- Then: X happens
+
+### Should handle Y error
+- Given: invalid input
+- When: I do C
+- Then: Error Z is returned
 ```
 
-This:
-- Parses all code with tree-sitter
-- Extracts functions, structs, enums, imports
-- Saves to `spec/code_analysis.toml`
-- Optionally auto-indexes files
+### What to Test
 
-### Query ingested code
+- Happy path (normal operation)
+- Edge cases (empty, null, boundary values)
+- Error cases (invalid input, network failure)
+- Edge cases specific to your domain
 
-```
-code_analysis(topic, area, item_type="functions", pattern="handle")
-code_parse(path, item_type="functions", pattern="login")
-```
+### What NOT to Test
+
+- Implementation details (test behavior, not how)
+- Third-party code
+- Trivial code (getters/setters)
 
 ---
 
-## Part 8: Best Practices
+## Debugging
 
-### DO
+When tests fail:
 
-- Read the spec before writing code
-- Update the spec before changing behavior
-- Link every file you create: `index_add(topic, path)`
-- Use `index_exports` before implementing shared functionality
-- Mark tasks `[-]` when starting, `[x]` when done
-- Reference other topics in code: `# ref:index:topic:name`
-- Push work forward: Roadmap → Working → Build
+1. **Read the error** - It's trying to help you
+2. **Locate the failure** - Which test? Which line?
+3. **Find the root cause** - Ask "why" five times
+4. **Fix it** - Make minimum change
+5. **Verify** - Run tests again
 
-### DON'T
+### Common Mistakes
 
-- Write code without reading the spec
-- Skip `index_add` - unlinked code is invisible
-- Duplicate functionality - check exports first
-- Leave tasks unmarked
-- Push to Build with incomplete work
-
-### The Golden Rule
-
-> **Query before implementing. Link when created. Complete tasks as you work.**
+- Changing multiple things at once
+- Not running tests after changes
+- Ignoring edge cases
+- Hardcoding values
+- Not checking null
 
 ---
 
-## Part 9: CLI Commands
+## Tips
 
-### Topic Commands
+1. **Small commits** - Each topic should do one thing
+2. **Clear names** - Topic names describe what it does
+3. **Test early** - Write tests before or alongside code
+4. **Ask questions** - If you're unsure, ask in Spec
+5. **Trust the process** - The pipeline exists for a reason
 
-```bash
-unispec topic add <name> -a <area>
-unispec topic list -a <area>
-unispec topic show <name> --from <area>
-unispec topic push <name> <target> --from <source>
-```
+---
 
-### Index Commands
+## Mental Model
 
-```bash
-unispec index add --topic <name> --path <file>
-unispec index list --topic <name>
-unispec index exports --topic <name>
-unispec index find <query>
-```
+Think of UniSpec like a factory assembly line:
 
-### Ingest Commands
+- Each station (area) has a specific job
+- Products (topics) move through stations
+- Each station inspects and improves
+- Defective products go back for rework
+- Only perfect products ship
 
-```bash
-unispec ingest run <path> -a <area> -t <topic>
-unispec parse file <path> --item-type functions
-```
+You can't skip stations. You can't skip inspections. The result is quality.
 
-### TUI Keys
+---
 
-| Key | Action |
-|-----|--------|
-| `n` | New topic |
-| `r` | Remove topic |
-| `p` | Push to another area |
-| `f` | Find links |
-| `←` `→` | Navigate |
-| `q` | Quit |
+## When Stuck
+
+1. **Unclear spec?** → Push to Spec, write it better
+2. **Tests failing?** → Go to Debugging, figure out why
+3. **Scope creep?** → Push back to Spec, define scope
+4. **Blocked?** → Document blockers, push to Roadmap
 
 ---
 
 ## Remember
 
-**The spec is the contract.**
+> Programs must be written for people to read, and only incidentally for machines to execute. — Harold Abelson
 
-Your job:
-1. Understand the spec
-2. Implement the spec
-3. Keep the spec updated
-4. Track progress via tasks
-5. Link all code to specs
+UniSpec helps you write code worth reading by forcing you to think before you type.

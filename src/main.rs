@@ -13,8 +13,8 @@ use clap::Parser;
 
 use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
-    AreaCommands, ConnectorCommands, IndexCommands, IngestCommands, ModeCommands, ParseCommands,
-    PattyCommands, PkgCommands, TopicCommands,
+    AreaCommands, AreaOrderCommands, ConnectorCommands, IndexCommands, IngestCommands,
+    ModeCommands, OrderCommands, ParseCommands, PattyCommands, PkgCommands, TopicCommands,
 };
 use crate::cli::{Cli, Commands};
 use crate::commands::{area, index, ingest, init, init_editor, repo, set, topic};
@@ -179,6 +179,20 @@ fn main() -> Result<()> {
                 }
             }
             AreaCommands::Health => area::run_health()?,
+            AreaCommands::Order { action } => match action {
+                AreaOrderCommands::Show => {
+                    println!("{}", area::run_area_order_show()?);
+                }
+                AreaOrderCommands::Add { areas, position } => {
+                    println!("{}", area::run_area_order_add(areas, position)?);
+                }
+                AreaOrderCommands::Remove { areas } => {
+                    println!("{}", area::run_area_order_remove(areas)?);
+                }
+                AreaOrderCommands::Reset => {
+                    println!("{}", area::run_area_order_reset()?);
+                }
+            },
         },
         Some(Commands::Topic(topic_cmd)) => match topic_cmd {
             TopicCommands::Add { topic, area } => {
@@ -214,6 +228,28 @@ fn main() -> Result<()> {
                 topic::run_show(&topic, all, from.as_deref())?
             }
             TopicCommands::Progress { area } => topic::run_progress(area.as_deref())?,
+            TopicCommands::Order { action } => match action {
+                OrderCommands::Show { area } => {
+                    let area = area.unwrap_or_else(|| "Working".to_string());
+                    println!("{}", topic::run_order(&area)?);
+                }
+                OrderCommands::Add {
+                    area,
+                    topics,
+                    position,
+                } => {
+                    let area = area.unwrap_or_else(|| "Working".to_string());
+                    println!("{}", topic::run_order_add(&area, topics, position)?);
+                }
+                OrderCommands::Remove { area, topics } => {
+                    let area = area.unwrap_or_else(|| "Working".to_string());
+                    println!("{}", topic::run_order_remove(&area, topics)?);
+                }
+                OrderCommands::Reset { area } => {
+                    let area = area.unwrap_or_else(|| "Working".to_string());
+                    println!("{}", topic::run_order_reset(&area)?);
+                }
+            },
         },
         Some(Commands::Index(index_cmd)) => match index_cmd {
             IndexCommands::Add {
@@ -272,6 +308,15 @@ fn main() -> Result<()> {
         Some(Commands::Mcp { path }) => {
             let path_str = path.map(|p| p.to_string_lossy().to_string());
             mcp::run_mcp_server(path_str.as_deref())?;
+        }
+        Some(Commands::Spec { name: _ }) => {
+            let master_path = crate::fs::spec_dir().join("master.md");
+            if master_path.exists() {
+                let content = std::fs::read_to_string(&master_path)?;
+                println!("{}", content);
+            } else {
+                println!("No master spec found. Create spec/master.md to add context.");
+            }
         }
         Some(Commands::Mode(mode_cmd)) => match mode_cmd {
             ModeCommands::List => {

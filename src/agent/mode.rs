@@ -196,6 +196,14 @@ pub struct ModeConfig {
     pub templates: TemplatesConfig,
     #[serde(default)]
     pub area_types: AreaTypesConfig,
+    #[serde(default)]
+    pub topic_order: TopicOrderConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TopicOrderConfig {
+    #[serde(default)]
+    pub areas: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -626,6 +634,144 @@ pub struct WorkflowInfo {
 pub fn get_protected_areas(mode_name: &str) -> Result<Vec<String>> {
     let config = get_mode_info(mode_name)?;
     Ok(config.areas.protected)
+}
+
+pub fn get_topic_order(area: &str) -> Vec<String> {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            if let Some(order) = config.topic_order.areas.get(area) {
+                return order.clone();
+            }
+        }
+    }
+    vec![]
+}
+
+pub fn set_topic_order(area: &str, order: Vec<String>) -> Result<()> {
+    let mode_name = current_mode()?;
+
+    let local_path = agent_dir().join("modes").join(&mode_name).join("mode.toml");
+    let global_path = global_modes_dir().join(&mode_name).join("mode.toml");
+
+    let config_path = if local_path.exists() {
+        local_path
+    } else if global_path.exists() {
+        global_path
+    } else {
+        return Err(anyhow::anyhow!("Mode '{}' not found", mode_name));
+    };
+
+    let content = fs::read_to_string(&config_path)?;
+    let mut config: ModeConfig = toml::from_str(&content)?;
+
+    config.topic_order.areas.insert(area.to_string(), order);
+
+    let new_content = toml::to_string_pretty(&config)?;
+    fs::write(&config_path, new_content)?;
+
+    Ok(())
+}
+
+pub fn add_to_topic_order(area: &str, topics: Vec<String>, position: Option<usize>) -> Result<()> {
+    let current_order = get_topic_order(area);
+
+    let mut new_order = current_order;
+    for topic in topics {
+        if !new_order.contains(&topic) {
+            if let Some(pos) = position {
+                if pos <= new_order.len() {
+                    new_order.insert(pos, topic);
+                } else {
+                    new_order.push(topic);
+                }
+            } else {
+                new_order.push(topic);
+            }
+        }
+    }
+
+    set_topic_order(area, new_order)
+}
+
+pub fn remove_from_topic_order(area: &str, topics: Vec<String>) -> Result<()> {
+    let current_order = get_topic_order(area);
+    let new_order: Vec<String> = current_order
+        .into_iter()
+        .filter(|t| !topics.contains(t))
+        .collect();
+    set_topic_order(area, new_order)
+}
+
+pub fn reset_topic_order(area: &str) -> Result<()> {
+    set_topic_order(area, vec![])
+}
+
+pub fn get_area_order() -> Vec<String> {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            return config.areas.default.clone();
+        }
+    }
+    vec![]
+}
+
+pub fn set_area_order(order: Vec<String>) -> Result<()> {
+    let mode_name = current_mode()?;
+
+    let local_path = agent_dir().join("modes").join(&mode_name).join("mode.toml");
+    let global_path = global_modes_dir().join(&mode_name).join("mode.toml");
+
+    let config_path = if local_path.exists() {
+        local_path
+    } else if global_path.exists() {
+        global_path
+    } else {
+        return Err(anyhow::anyhow!("Mode '{}' not found", mode_name));
+    };
+
+    let content = fs::read_to_string(&config_path)?;
+    let mut config: ModeConfig = toml::from_str(&content)?;
+
+    config.areas.default = order;
+
+    let new_content = toml::to_string_pretty(&config)?;
+    fs::write(&config_path, new_content)?;
+
+    Ok(())
+}
+
+pub fn add_to_area_order(areas: Vec<String>, position: Option<usize>) -> Result<()> {
+    let current_order = get_area_order();
+
+    let mut new_order = current_order;
+    for area in areas {
+        if !new_order.contains(&area) {
+            if let Some(pos) = position {
+                if pos <= new_order.len() {
+                    new_order.insert(pos, area);
+                } else {
+                    new_order.push(area);
+                }
+            } else {
+                new_order.push(area);
+            }
+        }
+    }
+
+    set_area_order(new_order)
+}
+
+pub fn remove_from_area_order(areas: Vec<String>) -> Result<()> {
+    let current_order = get_area_order();
+    let new_order: Vec<String> = current_order
+        .into_iter()
+        .filter(|a| !areas.contains(a))
+        .collect();
+    set_area_order(new_order)
+}
+
+pub fn reset_area_order() -> Result<()> {
+    set_area_order(vec![])
 }
 
 pub fn add_mode(source_path: &str, force_global: bool) -> Result<String> {

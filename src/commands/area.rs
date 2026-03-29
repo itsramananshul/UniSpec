@@ -1,6 +1,7 @@
 // src/commands/area.rs
 use crate::fs::{area_exists, list_areas, rename_area};
 use anyhow::Result;
+use std::collections::HashSet;
 use std::fs;
 
 fn get_current_area() -> String {
@@ -96,7 +97,47 @@ fn get_protected_areas() -> Result<Vec<String>> {
 }
 
 pub fn run_list() -> Result<()> {
-    let areas = list_areas()?;
+    let ordered_areas = crate::agent::mode::get_area_order();
+    let spec_dir = crate::fs::spec_dir();
+    let mut existing_areas = std::collections::HashSet::new();
+
+    if spec_dir.exists() {
+        for entry in std::fs::read_dir(spec_dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                let area_filename = crate::agent::mode::get_area_filename();
+                if entry.path().join(&area_filename).exists() {
+                    existing_areas.insert(entry.file_name().to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    let areas: Vec<String> = if !ordered_areas.is_empty() {
+        let mut ordered: Vec<String> = ordered_areas
+            .into_iter()
+            .filter(|a| existing_areas.contains(a))
+            .collect();
+        let ordered_count = ordered.len();
+        for area in &existing_areas {
+            if !ordered.contains(area) {
+                ordered.push(area.clone());
+            }
+        }
+        // Sort only the extra areas (after the ordered ones)
+        if ordered.len() > ordered_count {
+            let extra = ordered.split_off(ordered_count);
+            let mut sorted_extra = extra;
+            sorted_extra.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+            ordered.extend(sorted_extra);
+        }
+        ordered
+    } else {
+        let mut sorted: Vec<String> = existing_areas.into_iter().collect();
+        sorted.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        sorted
+    };
+
     let current = get_current_area();
 
     println!("Areas:");
@@ -203,4 +244,75 @@ pub fn run_health() -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn run_area_order_show() -> Result<String> {
+    let order = crate::agent::mode::get_area_order();
+
+    if order.is_empty() {
+        return Ok(
+            "No custom area order defined. Areas will be sorted alphabetically.".to_string(),
+        );
+    }
+
+    let content: String = order
+        .iter()
+        .enumerate()
+        .map(|(i, a)| format!("{}. {}", i + 1, a))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(content)
+}
+
+pub fn run_area_order_add(areas: Vec<String>, position: Option<usize>) -> Result<String> {
+    crate::agent::mode::add_to_area_order(areas.clone(), position)?;
+
+    let order = crate::agent::mode::get_area_order();
+    let order_content: String = order
+        .iter()
+        .enumerate()
+        .map(|(i, a)| format!("{}. {}", i + 1, a))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let pos_info = if let Some(p) = position {
+        format!(" at position {}", p + 1)
+    } else {
+        String::new()
+    };
+
+    Ok(format!(
+        "✅ Added {} area(s) to order{}.\n\nCurrent order:\n{}",
+        areas.len(),
+        pos_info,
+        order_content
+    ))
+}
+
+pub fn run_area_order_remove(areas: Vec<String>) -> Result<String> {
+    crate::agent::mode::remove_from_area_order(areas.clone())?;
+
+    let order = crate::agent::mode::get_area_order();
+    let order_content: String = if order.is_empty() {
+        "(alphabetical)".to_string()
+    } else {
+        order
+            .iter()
+            .enumerate()
+            .map(|(i, a)| format!("{}. {}", i + 1, a))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    Ok(format!(
+        "✅ Removed {} area(s) from order.\n\nCurrent order:\n{}",
+        areas.len(),
+        order_content
+    ))
+}
+
+pub fn run_area_order_reset() -> Result<String> {
+    crate::agent::mode::reset_area_order()?;
+    Ok("✅ Reset area order to alphabetical.".to_string())
 }

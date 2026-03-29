@@ -240,7 +240,28 @@ impl App {
                         let areas = self.state.load_areas().unwrap_or_default();
                         let items: Vec<ListItem> = areas.iter().enumerate().map(|(i, a)| {
                             let style = if Some(i) == self.list_state.selected() { Style::default().fg(Color::Yellow) } else { Style::default() };
-                            ListItem::new(format!(">> {}", a.clone())).style(style)
+                            let topic_count = self.state.count_topics_in_area(a);
+                            let count_str = if topic_count == 1 {
+                                "1 topic".to_string()
+                            } else {
+                                format!("{} topics", topic_count)
+                            };
+                            
+                            // Check if area has work in progress (has topics with tasks)
+                            let has_work = self.state.has_work_in_area(a);
+                            let work_indicator = if has_work {
+                                let spinner = match self.frame % 4 {
+                                    0 => "⠋",
+                                    1 => "⠙",
+                                    2 => "⠹",
+                                    _ => "⠸",
+                                };
+                                format!(" {}", spinner)
+                            } else {
+                                String::new()
+                            };
+                            
+                            ListItem::new(format!(">> {} ({}){}", a.clone(), count_str, work_indicator)).style(style)
                         }).collect();
                         let list = List::new(items).block(Block::default().title("Select Area").borders(Borders::ALL));
                         f.render_stateful_widget(list, if self.platypus_enabled { chunks[2] } else { chunks[1] }, &mut self.list_state);
@@ -295,7 +316,21 @@ impl App {
                                         .or(t.metadata.modified.as_ref())
                                         .map(|d| d.as_str())
                                         .unwrap_or("---");
-                                    format!("✅ {} │ completed: {}", t.topic, completed)
+                                    let current_agent = crate::commands::topic::get_agent_id();
+                                    let checkout_info = if t.is_checked_out {
+                                        if let Some(ref by) = t.checked_out_by {
+                                            if by == &current_agent {
+                                                " │ 🔒 checked out (you)".to_string()
+                                            } else {
+                                                format!(" │ 🔒 checked out by {}", by)
+                                            }
+                                        } else {
+                                            String::new()
+                                        }
+                                    } else {
+                                        String::new()
+                                    };
+                                    format!("✅ {} │ completed: {}{}", t.topic, completed, checkout_info)
                                 }
                                 crate::agent::mode::DisplayType::Working | crate::agent::mode::DisplayType::Standard => {
                                     let progress = if t.tasks_total > 0 { (t.tasks_completed * 100 / t.tasks_total) as u16 } else { 0 };
@@ -311,7 +346,22 @@ impl App {
                                     let arrow = if !t.children.is_empty() { " >" } else { "" };
                                     let topic_display = format!("{:<25}", if t.topic.len() > 25 { format!("{}...", &t.topic[..22]) } else { t.topic.clone() });
 
-                                    format!("{} {} {} {} ({}/{}){}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow)
+                                    let current_agent = crate::commands::topic::get_agent_id();
+                                    let checkout_info = if t.is_checked_out {
+                                        if let Some(ref by) = t.checked_out_by {
+                                            if by == &current_agent {
+                                                " 🔒(you)".to_string()
+                                            } else {
+                                                format!(" 🔒(by {})", by)
+                                            }
+                                        } else {
+                                            String::new()
+                                        }
+                                    } else {
+                                        String::new()
+                                    };
+
+                                    format!("{} {} {} {} ({}/{}){}{}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow, checkout_info)
                                 }
                             };
                             
@@ -326,7 +376,12 @@ impl App {
                 let help_text = if self.input_mode {
                     format!("{}: {}", self.input_prompt, self.input_buffer)
                 } else {
-                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: Push | f: Find | q: Quit"))
+                    let is_build = self.current_area
+                        .as_ref()
+                        .map(|a| a.to_lowercase() == "build")
+                        .unwrap_or(false);
+                    let move_cmd = if is_build { "Pull" } else { "Push" };
+                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | m: Master | q: Quit", move_cmd))
                 };
                 let help_widget = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
                 f.render_widget(help_widget, if self.platypus_enabled { chunks[3] } else { chunks[2] });
@@ -821,8 +876,45 @@ impl App {
                     self.message_timer = Some(Instant::now());
                 }
                 _ => {
-                    self.input_mode = true;
-                    self.input_prompt = "Target Area?".to_string();
+                    let is_build = self
+                        .current_area
+                        .as_ref()
+                        .map(|a| a.to_lowercase() == "build")
+                        .unwrap_or(false);
+
+                    if let Some(topic) = self
+                        .state
+                        .topics
+                        .get(self.list_state.selected().unwrap_or(0))
+                    {
+                        if is_build {
+                            // In Build area: pull to Working (checkout)
+                            let topic_name = topic.relative_path();
+                            match crate::commands::topic::run_pull(&topic_name, "Build") {
+                                Ok(msg) => {
+                                    self.message = Some(msg);
+                                    self.trigger_expression(PlatypusState::Working, 2);
+                                    self.state.update_status();
+                                    self.last_refresh = Instant::now();
+                                }
+                                Err(e) => {
+                                    self.message = Some(format!("Error: {}", e));
+                                    self.message_timer = Some(Instant::now());
+                                }
+                            }
+                        } else {
+                            // In other areas: push to target area
+                            if topic.is_checked_out {
+                                let by = topic.checked_out_by.as_deref().unwrap_or("unknown");
+                                self.message =
+                                    Some(format!("Cannot push: Topic is checked out by {}", by));
+                                self.message_timer = Some(Instant::now());
+                                return;
+                            }
+                            self.input_mode = true;
+                            self.input_prompt = "Target Area?".to_string();
+                        }
+                    }
                 }
             },
             KeyCode::Char('f') => {

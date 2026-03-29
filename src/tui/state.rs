@@ -16,6 +16,8 @@ pub struct TopicNode {
     pub tasks_in_progress: usize,
     pub metadata: SpecMetadata,
     pub children: Vec<TopicNode>,
+    pub is_checked_out: bool,
+    pub checked_out_by: Option<String>,
 }
 
 impl TopicNode {
@@ -53,20 +55,136 @@ impl AppState {
     }
 
     pub fn load_areas(&self) -> Result<Vec<String>> {
-        let mut areas = vec![];
+        // Get order from mode.toml, fallback to filesystem order
+        let ordered_areas = crate::agent::mode::get_area_order();
+
         let spec_dir = fs::spec_dir();
+        let mut existing_areas = std::collections::HashSet::new();
         if spec_dir.exists() {
             for entry in std::fs::read_dir(spec_dir)? {
                 let entry = entry?;
                 if entry.path().is_dir() {
                     let area_filename = crate::agent::mode::get_area_filename();
                     if entry.path().join(&area_filename).exists() {
-                        areas.push(entry.file_name().to_string_lossy().to_string());
+                        existing_areas.insert(entry.file_name().to_string_lossy().to_string());
                     }
                 }
             }
         }
-        Ok(areas)
+
+        // Use mode.toml order if defined, otherwise use filesystem order
+        if !ordered_areas.is_empty() {
+            // Filter to only existing areas, maintain order
+            let mut areas: Vec<String> = ordered_areas
+                .into_iter()
+                .filter(|a| existing_areas.contains(a))
+                .collect();
+            let ordered_count = areas.len();
+            // Add any areas not in the ordered list at the end
+            for area in &existing_areas {
+                if !areas.contains(area) {
+                    areas.push(area.clone());
+                }
+            }
+            // Sort only the extra areas (after the ordered ones)
+            if areas.len() > ordered_count {
+                let extra = areas.split_off(ordered_count);
+                let mut sorted_extra = extra;
+                sorted_extra.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+                areas.extend(sorted_extra);
+            }
+            Ok(areas)
+        } else {
+            // No order defined, use filesystem order (sorted)
+            let mut areas: Vec<String> = existing_areas.into_iter().collect();
+            areas.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+            Ok(areas)
+        }
+    }
+
+    pub fn count_topics_in_area(&self, area: &str) -> usize {
+        let area_spec_dir = fs::spec_dir().join(area);
+        if !area_spec_dir.exists() {
+            return 0;
+        }
+
+        std::fs::read_dir(&area_spec_dir)
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().is_dir())
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn has_work_in_area(&self, area: &str) -> bool {
+        let area_lower = area.to_lowercase();
+
+        // Build area never shows work indicator - those are shipped topics
+        if area_lower == "build" {
+            return false;
+        }
+
+        let area_spec_dir = fs::spec_dir().join(area);
+        if !area_spec_dir.exists() {
+            return false;
+        }
+
+        // Check each topic in the area for work in progress
+        if let Ok(entries) = std::fs::read_dir(&area_spec_dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    let spec_file = self.get_spec_filename_for_area(area);
+                    let spec_path = entry.path().join(&spec_file);
+
+                    if spec_path.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&spec_path) {
+                            if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
+                                let status = metadata.status.as_deref().unwrap_or("");
+
+                                // Statuses that indicate work is happening
+                                let active_statuses = [
+                                    "in-progress",
+                                    "in_progress",
+                                    "working",
+                                    "started",
+                                    "draft",
+                                    "proposed",
+                                    "pending",
+                                ];
+
+                                if active_statuses.contains(&status) {
+                                    // For areas with tasks.md, also check for incomplete tasks
+                                    let tasks_path = entry.path().join("tasks.md");
+                                    if tasks_path.exists() {
+                                        if let Ok(tasks_content) =
+                                            std::fs::read_to_string(&tasks_path)
+                                        {
+                                            let has_incomplete_tasks =
+                                                tasks_content.lines().any(|line| {
+                                                    let trimmed = line.trim();
+                                                    trimmed.starts_with("- [ ]")
+                                                        || trimmed.starts_with("- [-]")
+                                                        || trimmed.starts_with("* [ ]")
+                                                        || trimmed.starts_with("* [-]")
+                                                });
+                                            if has_incomplete_tasks {
+                                                return true;
+                                            }
+                                        }
+                                    }
+
+                                    // Any active status means work (for areas without tasks or with completed tasks)
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn load_topics_for_area(&mut self, area: &str) -> Result<()> {
@@ -74,6 +192,10 @@ impl AppState {
         let spec_file = self.get_spec_filename_for_area(area);
         let mut topics = vec![];
         let area_spec_dir = fs::spec_dir().join(area);
+
+        // Get order from mode.toml
+        let order = crate::agent::mode::get_topic_order(area);
+
         if area_spec_dir.exists() {
             for entry in std::fs::read_dir(&area_spec_dir)? {
                 let entry = entry?;
@@ -87,6 +209,24 @@ impl AppState {
                 }
             }
         }
+
+        // Sort topics by mode.toml order if defined, otherwise alphabetically
+        if !order.is_empty() {
+            topics.sort_by(|a, b| {
+                let a_idx = order
+                    .iter()
+                    .position(|o| o == &a.topic)
+                    .unwrap_or(usize::MAX);
+                let b_idx = order
+                    .iter()
+                    .position(|o| o == &b.topic)
+                    .unwrap_or(usize::MAX);
+                a_idx.cmp(&b_idx)
+            });
+        } else {
+            topics.sort_by(|a, b| a.topic.cmp(&b.topic));
+        }
+
         self.topics = topics;
         self.nav_state = NavState::TopicList(area.to_string());
         Ok(())
@@ -218,6 +358,14 @@ impl AppState {
             "waiting".to_string()
         };
 
+        let agent_id = crate::commands::topic::get_agent_id();
+        let is_checked_out = metadata
+            .checked_out
+            .as_ref()
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        let checked_out_by = metadata.checked_out.clone();
+
         Ok(TopicNode {
             topic,
             path: path.to_path_buf(),
@@ -229,6 +377,8 @@ impl AppState {
             tasks_in_progress: in_progress,
             metadata,
             children,
+            is_checked_out,
+            checked_out_by,
         })
     }
 

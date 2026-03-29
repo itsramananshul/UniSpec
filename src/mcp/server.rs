@@ -333,6 +333,17 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 json!({ "success": true, "data": serde_json::from_str::<serde_json::Value>(&result).unwrap() }),
             )
         }
+        "master_spec" => {
+            let master_path = crate::fs::spec_dir().join("master.md");
+            if master_path.exists() {
+                let content = std::fs::read_to_string(&master_path)?;
+                Ok(json!({ "success": true, "content": content }))
+            } else {
+                Ok(
+                    json!({ "success": false, "error": "No master spec found. Create spec/master.md" }),
+                )
+            }
+        }
         name => {
             // Check if it's a dynamic connector tool
             if name.starts_with("unispec_") {
