@@ -1,7 +1,6 @@
 // src/commands/area.rs
-use crate::fs::{area_exists, list_areas, rename_area};
+use crate::fs::{area_exists, rename_area};
 use anyhow::Result;
-use std::collections::HashSet;
 use std::fs;
 
 fn get_current_area() -> String {

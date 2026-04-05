@@ -1,0 +1,26 @@
+[mode]
+name = "default"
+display_name = "Standardized Spec-Driven Mode"
+description = "A robust, state-machine based workflow for spec-driven development."
+version = "1.0.0"
+
+[areas]
+default = ["Planned", "Staging", "Working", "Testing", "Fixing", "Build"]
+protected = ["Build"]
+default_area = "Planned"
+
+[capabilities]
+spec_writing = true
+building = true
+verification = true
+connectors = true
+custom_workflows = true
+
+[templates]
+spec_file = "spec.md"
+task_file = "task.md"
+area_file = "area.md"
+use_area_templates = true
+
+[scripts]
+post_activate = "echo 'Mode activated. Use /plan, /spec, /build, /test, or /verify to start.'"

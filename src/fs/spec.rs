@@ -1,8 +1,6 @@
 // src/fs/spec.rs
 use anyhow::Result;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SpecMetadata {
@@ -284,4 +282,33 @@ pub fn strip_checkout_metadata(content: &str) -> String {
     } else {
         content.to_string()
     }
+}
+
+pub fn bind_spec_to_file(
+    spec_path: &std::path::Path,
+    file_path: &str,
+    topic: &str,
+    area: &str,
+) -> Result<()> {
+    let content = std::fs::read_to_string(spec_path)?;
+    if !content.starts_with("---") {
+        return Err(anyhow::anyhow!("Spec file missing frontmatter"));
+    }
+
+    let end_idx = content
+        .find("\n---\n")
+        .or_else(|| content.find("\n--- "))
+        .ok_or_else(|| anyhow::anyhow!("Invalid frontmatter"))?;
+    let frontmatter = &content[3..end_idx];
+    let rest = &content[end_idx + 4..];
+
+    let mut lines: Vec<String> = frontmatter.lines().map(|l| l.to_string()).collect();
+    lines.retain(|l| !l.trim().starts_with("binding:"));
+    lines.push(format!("binding: {}", file_path));
+
+    let new_content = format!("---\n{}\n---\n{}", lines.join("\n"), rest);
+    std::fs::write(spec_path, new_content)?;
+
+    crate::fs::index::add_link(topic, area, file_path, "file")?;
+    Ok(())
 }

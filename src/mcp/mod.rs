@@ -562,6 +562,101 @@ pub fn get_tools() -> Vec<Tool> {
                 "properties": {}
             }),
         },
+        Tool {
+            name: "auto_build".to_string(),
+            description: "Build topic from spec - spawns agents, tracks commits, merges via PR".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic to build" },
+                    "area": { "type": "string", "description": "Area (default: current)" },
+                    "spec_file": { "type": "string", "description": "Optional specific spec file" }
+                },
+                "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "auto_ingest".to_string(),
+            description: "Ingest codebase into specs - requires master.md".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "code_path": { "type": "string", "description": "Path to codebase" },
+                    "master_spec": { "type": "string", "description": "Path to master.md (required)" },
+                    "topic": { "type": "string", "description": "Optional topic name" },
+                    "area": { "type": "string", "description": "Area (default: Working)" }
+                },
+                "required": ["code_path", "master_spec"]
+            }),
+        },
+        Tool {
+            name: "auto_verify".to_string(),
+            description: "Verify topic alignment - code → specs → topic".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic to verify" },
+                    "area": { "type": "string", "description": "Area (default: current)" }
+                },
+                "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "auto_locks_list".to_string(),
+            description: "List all active locks".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        Tool {
+            name: "auto_locks_clear".to_string(),
+            description: "Clear a lock by session_id".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "session_id": { "type": "string", "description": "Session ID to clear" }
+                },
+                "required": ["session_id"]
+            }),
+        },
+        Tool {
+            name: "auto_commits".to_string(),
+            description: "Get commit history for a topic".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic name" }
+                },
+                "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "auto_topic_tree".to_string(),
+            description: "Get nested topic structure".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic name" }
+                },
+                "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "auto_agent".to_string(),
+            description: "Run agent process manually for debugging".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic to work on" },
+                    "session_id": { "type": "string", "description": "Optional session ID" },
+                    "parent_topic": { "type": "string", "description": "Optional parent topic" },
+                    "area": { "type": "string", "description": "Area (default: Working)" },
+                    "workflow": { "type": "string", "description": "Workflow template (default: build)" }
+                },
+                "required": ["topic"]
+            }),
+        },
     ];
 
     // Add dynamic connector tools

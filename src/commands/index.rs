@@ -263,6 +263,19 @@ pub fn run_backlinks(topic: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn run_callers(symbol: &str) -> Result<()> {
+    let callers = crate::fs::index::find_callers(symbol)?;
+    if callers.is_empty() {
+        println!("No callers found for symbol '{}'.", symbol);
+    } else {
+        println!("Callers for '{}':", symbol);
+        for caller in callers {
+            println!("  - {}", caller);
+        }
+    }
+    Ok(())
+}
+
 pub fn run_exports(topic: Option<&str>) -> Result<()> {
     if let Some(t) = topic {
         let exports = crate::fs::index::get_exports_for_topic(t)?;

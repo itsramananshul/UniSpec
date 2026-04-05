@@ -2,12 +2,13 @@ use crate::tui::platypus::PLATYPUS_FRAMES;
 use crate::tui::state::{AppState, NavState, TopicNode};
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::prelude::CrosstermBackend;
+use ratatui::prelude::{Color, Style};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::Terminal;
 use ratatui::{
-    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    Terminal,
+    widgets::ListState,
 };
 use std::io::{self, Stdout};
 use std::time::{Duration, Instant};
@@ -191,7 +192,7 @@ impl App {
                 }
             }
 
-            terminal.draw(|f| {
+            terminal.draw(|f: &mut ratatui::Frame| {
                 let chunks = if self.platypus_enabled {
                     Layout::default()
                         .direction(Direction::Vertical)
@@ -246,7 +247,7 @@ impl App {
                             } else {
                                 format!("{} topics", topic_count)
                             };
-                            
+
                             // Check if area has work in progress (has topics with tasks)
                             let has_work = self.state.has_work_in_area(a);
                             let work_indicator = if has_work {
@@ -260,7 +261,7 @@ impl App {
                             } else {
                                 String::new()
                             };
-                            
+
                             ListItem::new(format!(">> {} ({}){}", a.clone(), count_str, work_indicator)).style(style)
                         }).collect();
                         let list = List::new(items).block(Block::default().title("Select Area").borders(Borders::ALL));
@@ -282,25 +283,25 @@ impl App {
                     }
                     _ => {
                         let area_type = self.state.topics.first().map(|t| t.area_type.clone()).unwrap_or(crate::agent::mode::DisplayType::Standard);
-                        
+
                         let items: Vec<ListItem> = self.state.topics.iter().enumerate().map(|(i, t)| {
                             let style = if Some(i) == self.list_state.selected() { Style::default().fg(Color::Yellow) } else { Style::default() };
-                            
+
                             let display_line = match t.area_type {
                                 crate::agent::mode::DisplayType::Roadmap => {
                                     let impact = t.metadata.impact.as_deref().unwrap_or("");
                                     let change_type = t.metadata.change_type.as_deref().unwrap_or("");
-                                    
+
                                     let impact_labels = crate::agent::mode::get_impact_labels("roadmap");
                                     let type_labels = crate::agent::mode::get_change_type_labels("roadmap");
-                                    
+
                                     let impact_badge = impact_labels.get(&impact.to_lowercase())
                                         .cloned()
                                         .unwrap_or_else(|| format!("[{}]", impact.to_uppercase()));
                                     let type_badge = type_labels.get(&change_type.to_lowercase())
                                         .cloned()
                                         .unwrap_or_else(|| change_type.to_string());
-                                    
+
                                     if impact.is_empty() && change_type.is_empty() {
                                         t.topic.clone()
                                     } else if impact.is_empty() {
@@ -364,7 +365,7 @@ impl App {
                                     format!("{} {} {} {} ({}/{}){}{}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow, checkout_info)
                                 }
                             };
-                            
+
                             ListItem::new(display_line).style(style)
                         }).collect();
                         let list = List::new(items).block(Block::default().title("Specs").borders(Borders::ALL))

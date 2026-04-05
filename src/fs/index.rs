@@ -95,6 +95,7 @@ pub struct CodeElement {
     pub signature: Option<String>,
     pub start_line: Option<u32>,
     pub end_line: Option<u32>,
+    pub calls: Vec<String>,
 }
 
 pub fn load_code_analysis() -> Result<CodeAnalysisStore> {
@@ -553,4 +554,20 @@ pub fn get_dependents(topic: &str) -> Result<Vec<ExportQueryResult>> {
     }
 
     Ok(dependents)
+}
+
+pub fn find_callers(symbol_name: &str) -> Result<Vec<String>> {
+    let store = load_code_analysis()?;
+    let mut callers = Vec::new();
+
+    for (topic, topic_data) in &store.topics {
+        for file in &topic_data.files {
+            for func in &file.functions {
+                if func.calls.iter().any(|c| c == symbol_name) {
+                    callers.push(format!("{}::{}", topic, func.name));
+                }
+            }
+        }
+    }
+    Ok(callers)
 }

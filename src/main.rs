@@ -13,8 +13,9 @@ use clap::Parser;
 
 use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
-    AreaCommands, AreaOrderCommands, ConnectorCommands, IndexCommands, IngestCommands,
-    ModeCommands, OrderCommands, ParseCommands, PattyCommands, PkgCommands, TopicCommands,
+    AreaCommands, AreaOrderCommands, AutoCommands, ConnectorCommands, IndexCommands,
+    IngestCommands, ModeCommands, OrderCommands, ParseCommands, PattyCommands, PkgCommands,
+    TopicCommands,
 };
 use crate::cli::{Cli, Commands};
 use crate::commands::{area, index, ingest, init, init_editor, repo, set, topic};
@@ -304,6 +305,7 @@ fn main() -> Result<()> {
             IndexCommands::Query { query, by } => index::run_query(&query, &by)?,
             IndexCommands::Depends { topic } => index::run_depends(&topic)?,
             IndexCommands::Lookup { id } => index::run_lookup(&id)?,
+            IndexCommands::Callers { symbol } => index::run_callers(&symbol)?,
         },
         Some(Commands::Mcp { path }) => {
             let path_str = path.map(|p| p.to_string_lossy().to_string());
@@ -501,7 +503,7 @@ fn main() -> Result<()> {
                     platypus::happy();
                 }
             }
-            IngestCommands::Watch { path, topic } => {
+            IngestCommands::Watch { path: _, topic: _ } => {
                 let config = crate::fs::config::get_ingest_config()?;
                 if config.auto_index {
                     println!("🔄 Live auto-indexing is enabled in .agent/config.toml");
@@ -511,6 +513,10 @@ fn main() -> Result<()> {
                     println!("   [ingest]");
                     println!("   auto_index = true");
                 }
+            }
+            IngestCommands::Recursive { path, area } => {
+                let result = ingest::run_ingest_recursive(&path, &area)?;
+                println!("{}", result);
             }
             IngestCommands::Stop => {
                 println!("🛑 Stopping file watcher...");
@@ -535,6 +541,49 @@ fn main() -> Result<()> {
                 } else {
                     println!("{}", result);
                 }
+            }
+        },
+        Some(Commands::Auto(auto_cmd)) => match auto_cmd {
+            AutoCommands::Build {
+                topic,
+                area,
+                spec_file: _,
+            } => {
+                let result =
+                    crate::agent::auto::build::run_auto_build(&topic, area.as_deref(), None)?;
+                println!("Build result: {:?}", result);
+            }
+            AutoCommands::Verify { topic, area } => {
+                let result = crate::agent::auto::verify::run_auto_verify(&topic, area.as_deref())?;
+                println!("Verification result: {:?}", result);
+            }
+            AutoCommands::Test {
+                topic,
+                pre_script,
+                post_script,
+            } => {
+                let result = crate::agent::auto::test::run_auto_test(
+                    topic.as_deref(),
+                    pre_script.as_deref(),
+                    post_script.as_deref(),
+                )?;
+                println!("Test result: {:?}", result);
+            }
+            AutoCommands::Agent {
+                topic,
+                session_id,
+                parent_topic,
+                area,
+                workflow,
+            } => {
+                let result = crate::agent::auto::agent::run_agent(
+                    &topic,
+                    session_id.as_deref(),
+                    parent_topic.as_deref(),
+                    area.as_deref(),
+                    workflow.as_deref(),
+                )?;
+                println!("Agent result: {:?}", result);
             }
         },
         Some(Commands::Patty(paddy_cmd)) => match paddy_cmd {

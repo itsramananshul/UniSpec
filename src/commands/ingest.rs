@@ -68,6 +68,7 @@ pub fn run_ingest(
                         signature: Some(g.signature.clone()),
                         start_line: Some(g.start_line),
                         end_line: Some(g.end_line),
+                        calls: g.calls.clone(),
                     })
                     .collect(),
                 structs: f
@@ -78,6 +79,7 @@ pub fn run_ingest(
                         signature: None,
                         start_line: None,
                         end_line: None,
+                        calls: vec![],
                     })
                     .collect(),
                 enums: f
@@ -88,6 +90,7 @@ pub fn run_ingest(
                         signature: None,
                         start_line: None,
                         end_line: None,
+                        calls: vec![],
                     })
                     .collect(),
                 imports: f.imports.iter().map(|i| i.path.clone()).collect(),
@@ -123,6 +126,25 @@ pub fn run_ingest(
         "✅ Ingested codebase into topic '{}' in {}/",
         topic, area
     ))
+}
+
+pub fn run_ingest_recursive(path: &str, area: &str) -> Result<String> {
+    let code_path = Path::new(path);
+    if !code_path.is_dir() {
+        return Err(anyhow::anyhow!("❌ Path is not a directory: {}", path));
+    }
+
+    let mut results = Vec::new();
+    for entry in fs::read_dir(code_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            let topic = path.file_name().unwrap().to_string_lossy().to_string();
+            let res = run_ingest(path.to_str().unwrap(), area, Some(&topic), None, false)?;
+            results.push(res);
+        }
+    }
+    Ok(format!("✅ Recursively ingested:\n{}", results.join("\n")))
 }
 
 fn create_topic_hierarchy(analysis: &CodeAnalysis, root_topic: &str, area: &str) -> Result<()> {

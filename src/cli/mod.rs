@@ -205,6 +205,61 @@ pub enum Commands {
     /// Control platypus mascot display
     #[command(subcommand)]
     Patty(PattyCommands),
+    /// Auto-orchestration commands (build, verify, test, agent)
+    #[command(subcommand)]
+    Auto(AutoCommands),
+}
+
+#[derive(Subcommand)]
+pub enum AutoCommands {
+    /// Build a topic
+    Build {
+        /// Topic to build
+        topic: String,
+        /// Area to build in
+        #[arg(short, long)]
+        area: Option<String>,
+        /// Spec file to use
+        #[arg(short, long)]
+        spec_file: Option<String>,
+    },
+    /// Verify a topic
+    Verify {
+        /// Topic to verify
+        topic: String,
+        /// Area to verify in
+        #[arg(short, long)]
+        area: Option<String>,
+    },
+    /// Run tests for a topic
+    Test {
+        /// Topic to test
+        #[arg(short, long)]
+        topic: Option<String>,
+        /// Pre-build script
+        #[arg(long)]
+        pre_script: Option<String>,
+        /// Post-build script
+        #[arg(long)]
+        post_script: Option<String>,
+    },
+    /// Run an agent session
+    Agent {
+        /// Topic to run agent for
+        topic: String,
+        /// Session ID
+        #[arg(short, long)]
+        session_id: Option<String>,
+        /// Parent topic
+        #[arg(short, long)]
+        parent_topic: Option<String>,
+        /// Area
+        #[arg(short, long)]
+        area: Option<String>,
+        /// Workflow
+        #[arg(short, long)]
+        workflow: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -558,6 +613,12 @@ pub enum IndexCommands {
         #[arg(short, long)]
         id: String,
     },
+    /// Find callers of a symbol
+    Callers {
+        /// Symbol name to find callers for
+        #[arg(short, long)]
+        symbol: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -640,6 +701,14 @@ pub enum IngestCommands {
         /// Topic to link code to
         #[arg(short, long)]
         topic: Option<String>,
+    },
+    /// Recursively ingest a codebase bottom-up
+    Recursive {
+        /// Path to the codebase to ingest
+        path: String,
+        /// Target area to create specs in
+        #[arg(short, long, default_value = "Planned")]
+        area: String,
     },
     /// Stop watching
     Stop,

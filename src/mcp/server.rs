@@ -134,6 +134,22 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             crate::commands::index::run_remove(topic, path)?;
             Ok(json!({ "success": true }))
         }
+        "unispec_bind_spec" => {
+            let spec_path = args.get("spec_path").and_then(|v| v.as_str()).unwrap();
+            let file_path = args.get("file_path").and_then(|v| v.as_str()).unwrap();
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Working");
+            crate::fs::spec::bind_spec_to_file(
+                std::path::Path::new(spec_path),
+                file_path,
+                topic,
+                area,
+            )?;
+            Ok(json!({ "success": true }))
+        }
         "index_find" => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap();
             let by = args.get("by").and_then(|v| v.as_str()).unwrap_or("topic");
@@ -343,6 +359,85 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                     json!({ "success": false, "error": "No master spec found. Create spec/master.md" }),
                 )
             }
+        }
+        "auto_build" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args.get("area").and_then(|v| v.as_str());
+            let spec_file = args.get("spec_file").and_then(|v| v.as_str());
+            let result = crate::agent::auto::run_auto_build(topic, area, spec_file)?;
+            Ok(json!({ "success": true, "result": result }))
+        }
+        "auto_ingest" => {
+            let code_path = args.get("code_path").and_then(|v| v.as_str()).unwrap();
+            let master_spec = args.get("master_spec").and_then(|v| v.as_str()).unwrap();
+            let topic = args.get("topic").and_then(|v| v.as_str());
+            let area = args.get("area").and_then(|v| v.as_str());
+            let result = crate::agent::auto::run_auto_ingest(code_path, master_spec, topic, area)?;
+            Ok(json!({ "success": true, "result": result }))
+        }
+        "auto_verify" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args.get("area").and_then(|v| v.as_str());
+            let result = crate::agent::auto::run_auto_verify(topic, area)?;
+            Ok(json!({ "success": true, "result": result }))
+        }
+        "auto_locks_list" => {
+            let locks = crate::agent::auto::list_locks()?;
+            let locks_json: Vec<serde_json::Value> = locks
+                .iter()
+                .map(|l| {
+                    serde_json::json!({
+                        "session_id": l.session_id,
+                        "topic": l.topic,
+                        "parent_topic": l.parent_topic,
+                        "last_task": l.last_task,
+                        "error_message": l.error_message,
+                        "timestamp": l.timestamp,
+                        "status": l.status
+                    })
+                })
+                .collect();
+            Ok(json!({ "success": true, "locks": locks_json }))
+        }
+        "auto_locks_clear" => {
+            let session_id = args.get("session_id").and_then(|v| v.as_str()).unwrap();
+            crate::agent::auto::clear_lock(session_id)?;
+            Ok(json!({ "success": true, "message": format!("Lock {} cleared", session_id) }))
+        }
+        "auto_commits" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let commits = crate::agent::auto::get_commits(topic)?;
+            let commits_json: Vec<serde_json::Value> = commits
+                .iter()
+                .map(|c| {
+                    serde_json::json!({
+                        "id": c.id,
+                        "topic": c.topic,
+                        "parent_topic": c.parent_topic,
+                        "description": c.description,
+                        "files": c.files,
+                        "timestamp": c.timestamp,
+                        "status": "completed"
+                    })
+                })
+                .collect();
+            Ok(json!({ "success": true, "commits": commits_json }))
+        }
+        "auto_topic_tree" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let tree = crate::agent::auto::get_topic_tree(topic)?;
+            let tree_json = serde_json::to_value(&tree)?;
+            Ok(json!({ "success": true, "tree": tree_json }))
+        }
+        "auto_agent" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let session_id = args.get("session_id").and_then(|v| v.as_str());
+            let parent_topic = args.get("parent_topic").and_then(|v| v.as_str());
+            let area = args.get("area").and_then(|v| v.as_str());
+            let workflow = args.get("workflow").and_then(|v| v.as_str());
+            let result =
+                crate::agent::auto::run_agent(topic, session_id, parent_topic, area, workflow)?;
+            Ok(json!({ "success": true, "result": result }))
         }
         name => {
             // Check if it's a dynamic connector tool

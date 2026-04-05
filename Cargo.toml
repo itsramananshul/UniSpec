@@ -1,6 +1,6 @@
 [package]
 name = "unispec"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 description = "Open Source Spec-Driven Development CLI"
 readme = "README.md"
@@ -26,6 +26,7 @@ dirs = "5"
 walkdir = "2.4"
 regex = "1.10"
 itertools = "0.12"
+uuid = { version = "1.0", features = ["v4"] }
 
 # Tree-sitter for code parsing
 tree-sitter = "0.24"

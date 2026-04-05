@@ -22,6 +22,7 @@ pub struct Function {
     pub docs: Vec<String>,
     pub start_line: u32,
     pub end_line: u32,
+    pub calls: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -329,12 +330,26 @@ impl CodeParser {
                     .to_string();
                 let first_line = signature.lines().next().unwrap_or("").to_string();
                 let docs = self.extract_docs(node, content);
+                let mut calls = Vec::new();
+                let mut call_cursor = node.walk();
+                for child in node.children(&mut call_cursor) {
+                    if child.kind() == "call_expression" || child.kind() == "function_call" {
+                        if let Some(call_name) = child.child(0).map(|n| {
+                            n.utf8_text(content.as_bytes())
+                                .unwrap_or_default()
+                                .to_string()
+                        }) {
+                            calls.push(call_name);
+                        }
+                    }
+                }
                 functions.push(Function {
                     name,
                     signature: first_line,
                     docs,
                     start_line: node.start_position().row as u32 + 1,
                     end_line: node.end_position().row as u32 + 1,
+                    calls,
                 });
             }
         }

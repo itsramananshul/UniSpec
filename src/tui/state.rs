@@ -1,5 +1,5 @@
 // src/tui/state.rs
-use crate::agent::mode::{DisplayType, ModeConfig};
+use crate::agent::mode::DisplayType;
 use crate::fs::{self, spec::SpecMetadata};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
