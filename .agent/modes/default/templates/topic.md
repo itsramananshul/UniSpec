@@ -5,5 +5,5 @@ Short: [Add a one-liner description here]
 [Detailed purpose and overview of this topic]
 
 ## Relations
-- Parent: {{parent_topic}}
-- Related: [List related topics]
+- Parent: {{parent_topic_path}}
+- Sub-topics: [List of child directories]

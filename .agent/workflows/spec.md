@@ -1,7 +1,7 @@
 # Workflow: /spec
 
 ## Objective
-Formalize an idea into a structured specification and task list.
+Iteratively interview the user to define a robust specification, nested topic structure, and task list. You will ask questions until you fully understand what the user wants and you cn build it exactly the way the user wants the program.
 
 ## Steps
 1. **Analyze Input**: Read the topic's `topic.md` one-liner and any existing notes from the `Planned` area.

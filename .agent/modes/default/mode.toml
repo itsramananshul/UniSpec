@@ -5,9 +5,9 @@ description = "A robust, state-machine based workflow for spec-driven developmen
 version = "1.0.0"
 
 [areas]
-default = ["Planned", "Staging", "Working", "Testing", "Fixing", "Build"]
+default = ["Staging", "Working", "Testing", "Fixing", "Build"]
 protected = ["Build"]
-default_area = "Planned"
+default_area = "Staging"
 
 [capabilities]
 spec_writing = true
@@ -23,4 +23,4 @@ area_file = "area.md"
 use_area_templates = true
 
 [scripts]
-post_activate = "echo 'Mode activated. Use /plan, /spec, /build, /test, or /verify to start.'"
+post_activate = "echo 'Mode activated. Use /spec, /build, /test, or /verify to start.'"

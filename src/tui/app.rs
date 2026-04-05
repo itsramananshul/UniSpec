@@ -421,7 +421,29 @@ impl App {
                     self.pending_args.push(input.clone());
                     self.input_buffer.clear();
 
-                    if self.input_prompt == "Name for new spec?" {
+                    if self.input_prompt == "Create (t)opic or (s)pec?" {
+                        if input.to_lowercase() == "t" {
+                            self.input_prompt = "Name for new topic?".to_string();
+                        } else if input.to_lowercase() == "s" {
+                            self.input_prompt = "Name for new spec?".to_string();
+                        } else {
+                            self.input_mode = false;
+                            self.pending_args.clear();
+                        }
+                    } else if self.input_prompt == "Name for new topic?" {
+                        let topic_name = self.pending_args[0].clone();
+                        let area = self.current_area.as_deref().unwrap_or("Working");
+                        match crate::commands::topic::run_new(&topic_name, area) {
+                            Ok(msg) => {
+                                self.message = Some(msg);
+                                self.trigger_expression(PlatypusState::Happy, 2);
+                            }
+                            Err(e) => self.message = Some(format!("Error: {}", e)),
+                        }
+                        self.state.update_status();
+                        self.input_mode = false;
+                        self.pending_args.clear();
+                    } else if self.input_prompt == "Name for new spec?" {
                         if let Some(area) = &self.current_area {
                             let area_type = self.get_area_type(area);
 
@@ -844,7 +866,7 @@ impl App {
                         self.input_prompt = format!("Path to add to {}?", topic);
                     }
                     _ => {
-                        self.input_prompt = "Name for new spec?".to_string();
+                        self.input_prompt = "Create (t)opic or (s)pec?".to_string();
                     }
                 }
             }

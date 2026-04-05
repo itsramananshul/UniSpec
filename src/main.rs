@@ -309,7 +309,7 @@ fn main() -> Result<()> {
         },
         Some(Commands::Mcp { path }) => {
             let path_str = path.map(|p| p.to_string_lossy().to_string());
-            mcp::run_mcp_server(path_str.as_deref())?;
+            mcp::server::run_mcp_server(path_str.as_deref())?;
         }
         Some(Commands::Spec { name: _ }) => {
             let master_path = crate::fs::spec_dir().join("master.md");

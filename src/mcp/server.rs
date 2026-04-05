@@ -134,6 +134,104 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             crate::commands::index::run_remove(topic, path)?;
             Ok(json!({ "success": true }))
         }
+        "unispec_nav" => {
+            let area = args.get("area").and_then(|v| v.as_str());
+            let topics = crate::fs::list_areas()?;
+            Ok(json!({ "success": true, "areas": topics }))
+        }
+        "unispec_read_spec" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Working");
+            let spec_path = crate::fs::spec_dir().join(area).join(topic).join("spec.md");
+            let task_path = crate::fs::spec_dir().join(area).join(topic).join("task.md");
+            let spec = std::fs::read_to_string(spec_path).unwrap_or_default();
+            let tasks = std::fs::read_to_string(task_path).unwrap_or_default();
+            Ok(json!({ "success": true, "spec": spec, "tasks": tasks }))
+        }
+        "unispec_update_task" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let task_index = args.get("task_index").and_then(|v| v.as_u64()).unwrap() as usize;
+            let status = args.get("status").and_then(|v| v.as_str()).unwrap();
+            let note = args.get("note").and_then(|v| v.as_str()).unwrap_or("");
+            // Logic to update task.md
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Working");
+            let path = crate::fs::spec_dir().join(area).join(topic).join("task.md");
+            if !path.exists() {
+                return Err(anyhow::anyhow!("Task file not found: {:?}", path));
+            }
+            let mut lines: Vec<String> = std::fs::read_to_string(&path)?
+                .lines()
+                .map(|s| s.to_string())
+                .collect();
+            if let Some(line) = lines.get_mut(task_index) {
+                *line = format!(
+                    "- [{}] Task: {} - Note: {}",
+                    status,
+                    line.split("Task: ").nth(1).unwrap_or(""),
+                    note
+                );
+                std::fs::write(path, lines.join("\n"))?;
+            }
+            Ok(json!({ "success": true }))
+        }
+        "unispec_query_relations" => {
+            let symbol = args.get("symbol").and_then(|v| v.as_str()).unwrap();
+            let callers = crate::fs::index::find_callers(symbol)?;
+            Ok(json!({ "success": true, "callers": callers }))
+        }
+        "unispec_write_code" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Working");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap();
+            let content = args.get("content").and_then(|v| v.as_str()).unwrap();
+
+            let spec_path = crate::fs::spec_dir().join(area).join(topic).join("spec.md");
+            let spec_content = std::fs::read_to_string(&spec_path)?;
+            let metadata = crate::fs::spec::parse_spec_metadata(&spec_content)
+                .ok_or_else(|| anyhow::anyhow!("Spec metadata not found"))?;
+
+            // Gatekeeper: Verify binding
+            let binding = spec_content
+                .lines()
+                .find(|l| l.trim().starts_with("binding:"))
+                .map(|l| l.replace("binding:", "").trim().to_string())
+                .ok_or_else(|| anyhow::anyhow!("No binding found in spec"))?;
+
+            if !path.ends_with(&binding) {
+                return Err(anyhow::anyhow!(
+                    "File path {} is not bound to spec binding {}",
+                    path,
+                    binding
+                ));
+            }
+
+            std::fs::write(path, content)?;
+            Ok(json!({ "success": true }))
+        }
+        "unispec_auto_build" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Working");
+            let result = crate::agent::auto::build::run_auto_build(topic, Some(area), None)?;
+            Ok(json!({ "success": true, "result": format!("{:?}", result) }))
+        }
+        "unispec_auto_verify" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let fix = args.get("fix").and_then(|v| v.as_bool()).unwrap_or(false);
+            let result = crate::agent::auto::verify::run_auto_verify(topic, Some("Working"))?;
+            Ok(json!({ "success": true, "result": format!("{:?}", result) }))
+        }
         "unispec_bind_spec" => {
             let spec_path = args.get("spec_path").and_then(|v| v.as_str()).unwrap();
             let file_path = args.get("file_path").and_then(|v| v.as_str()).unwrap();

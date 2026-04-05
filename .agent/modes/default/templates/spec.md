@@ -1,5 +1,5 @@
 ---
-binding: {{file_path}}
+binding: /src/
 status: draft
 impact: medium
 change_type: feature
@@ -11,3 +11,8 @@ change_type: feature
 
 ## Acceptance Criteria
 - [ ] 
+
+## Technical Notes
+- Data Structures: 
+- Technical Stack: 
+- Scope Boundaries: 
