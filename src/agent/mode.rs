@@ -417,7 +417,7 @@ pub fn get_spec_filename() -> String {
 
 /// Get the spec file name for a specific area
 pub fn get_spec_filename_for_area(area: &str) -> String {
-    if let Ok(mode_name) = current_mode() {
+    let result = if let Ok(mode_name) = current_mode() {
         if let Ok(config) = get_mode_info(&mode_name) {
             let extra = &config.templates.extra;
             let area_lower = area.to_lowercase();
@@ -425,10 +425,18 @@ pub fn get_spec_filename_for_area(area: &str) -> String {
             if let Some(f) = extra.get(&spec_key) {
                 return f.clone();
             }
-            return config.templates.spec_file;
+            config.templates.spec_file
+        } else {
+            String::new()
         }
+    } else {
+        String::new()
+    };
+    if result.is_empty() {
+        "specs.md".to_string()
+    } else {
+        result
     }
-    "specs.md".to_string()
 }
 
 /// Get the task file name from current mode's config

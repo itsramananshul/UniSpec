@@ -172,9 +172,16 @@ impl AppState {
             }
         }
 
-        // Sort topics by mode.toml order if defined, otherwise alphabetically
-        if !order.is_empty() {
-            topics.sort_by(|a, b| {
+        // Sort topics before specs, then alphabetically
+        topics.sort_by(|a, b| {
+            let a_is_spec = a.status == "spec";
+            let b_is_spec = b.status == "spec";
+
+            if a_is_spec != b_is_spec {
+                return a_is_spec.cmp(&b_is_spec);
+            }
+
+            if !order.is_empty() {
                 let a_idx = order
                     .iter()
                     .position(|o| o == &a.topic)
@@ -184,10 +191,10 @@ impl AppState {
                     .position(|o| o == &b.topic)
                     .unwrap_or(usize::MAX);
                 a_idx.cmp(&b_idx)
-            });
-        } else {
-            topics.sort_by(|a, b| a.topic.cmp(&b.topic));
-        }
+            } else {
+                a.topic.cmp(&b.topic)
+            }
+        });
 
         self.topics = topics;
         self.nav_state = NavState::TopicList(area.to_string());
@@ -290,13 +297,40 @@ impl AppState {
         if path.exists() {
             for entry in std::fs::read_dir(path)? {
                 let entry = entry?;
-                if entry.path().is_dir() {
+                let path = entry.path();
+                if path.is_dir() {
                     children.push(self.load_topic_recursive(
-                        &entry.path(),
+                        &path,
                         area.clone(),
                         area_type.clone(),
                         spec_file,
                     )?);
+                } else if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                    if filename.ends_with("_spec.md") {
+                        let spec_name = filename.trim_end_matches("_spec.md");
+                        let task_filename = format!("{}_task.md", spec_name);
+                        let task_path = path.parent().unwrap().join(task_filename);
+                        let (total, completed, in_progress) = if task_path.exists() {
+                            Self::count_tasks_in_dir(&task_path, &area)
+                        } else {
+                            (0, 0, 0)
+                        };
+
+                        children.push(TopicNode {
+                            topic: spec_name.to_string(),
+                            path: path.clone(),
+                            area: area.clone(),
+                            area_type: area_type.clone(),
+                            status: "spec".to_string(),
+                            tasks_total: total,
+                            tasks_completed: completed,
+                            tasks_in_progress: in_progress,
+                            metadata: SpecMetadata::default(),
+                            children: vec![],
+                            is_checked_out: false,
+                            checked_out_by: None,
+                        });
+                    }
                 }
             }
         }
@@ -344,24 +378,18 @@ impl AppState {
         })
     }
 
-    fn load_spec_metadata(&self, path: &Path, spec_file: &str) -> SpecMetadata {
-        // Try the configured spec file first
-        let spec_path = path.join(spec_file);
-        if spec_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&spec_path) {
-                if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
-                    return metadata;
-                }
-            }
-        }
-
-        // Fallback: try common spec file names
-        for filename in &["spec.md", "specs.md", "spec.MD", "SPEC.MD"] {
-            let fallback_path = path.join(filename);
-            if fallback_path.exists() && fallback_path != spec_path {
-                if let Ok(content) = std::fs::read_to_string(&fallback_path) {
-                    if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
-                        return metadata;
+    fn load_spec_metadata(&self, path: &Path, _spec_file: &str) -> SpecMetadata {
+        // Look for any file ending in _spec.md in the directory
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                    if filename.ends_with("_spec.md") {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Some(metadata) = crate::fs::spec::parse_spec_metadata(&content) {
+                                return metadata;
+                            }
+                        }
                     }
                 }
             }
@@ -387,25 +415,47 @@ impl AppState {
         (total, completed, in_progress)
     }
 
-    fn count_tasks_in_dir(path: &Path, area: &str) -> (usize, usize, usize) {
-        let task_filename = crate::agent::mode::get_task_filename_for_area(area);
-        let tasks_path = path.join(&task_filename);
-        if !tasks_path.exists() {
-            return (0, 0, 0);
-        }
-
+    fn count_tasks_in_dir(path: &Path, _area: &str) -> (usize, usize, usize) {
         let mut total = 0;
         let mut completed = 0;
         let mut in_progress = 0;
-        if let Ok(content) = std::fs::read_to_string(&tasks_path) {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("- [") {
-                    total += 1;
-                    if trimmed.starts_with("- [x]") || trimmed.starts_with("- [X]") {
-                        completed += 1;
-                    } else if trimmed.starts_with("- [-]") {
-                        in_progress += 1;
+
+        if path.is_file() && path.to_string_lossy().ends_with("_task.md") {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("- [") {
+                        total += 1;
+                        if trimmed.starts_with("- [x]") || trimmed.starts_with("- [X]") {
+                            completed += 1;
+                        } else if trimmed.starts_with("- [-]") {
+                            in_progress += 1;
+                        }
+                    }
+                }
+            }
+        } else if path.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                        if filename.ends_with("_task.md") {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                for line in content.lines() {
+                                    let trimmed = line.trim();
+                                    if trimmed.starts_with("- [") {
+                                        total += 1;
+                                        if trimmed.starts_with("- [x]")
+                                            || trimmed.starts_with("- [X]")
+                                        {
+                                            completed += 1;
+                                        } else if trimmed.starts_with("- [-]") {
+                                            in_progress += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

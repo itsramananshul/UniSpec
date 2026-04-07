@@ -16,6 +16,10 @@ default = ["Staging", "Working", "Build"]
 protected = ["Staging", "Working", "Build"]
 default_area = "Working"
 
+[templates]
+spec_file = "specs.md"
+task_file = "tasks.md"
+
 [capabilities]
 spec_writing = true
 building = true

@@ -1,4 +1,4 @@
-# Planned
+# Planning
 
 ## Purpose
 This area serves as the initial container for unstructured ideas, high-level concepts, and feature requests. It is the "brainstorming" phase before any formal specification is written.

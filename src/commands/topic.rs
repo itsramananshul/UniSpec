@@ -23,26 +23,59 @@ pub fn run_new(topic: &str, area_str: &str) -> Result<String> {
     run_new_with_metadata(topic, area_str, None, None)
 }
 
+pub fn run_new_spec(spec_name: &str, topic_path: &str, area_str: &str) -> Result<String> {
+    let sanitized_name = spec_name.replace(" ", "-");
+    let topic_dir = crate::fs::spec_dir().join(area_str).join(topic_path);
+
+    if !topic_dir.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Topic directory '{}' does not exist.",
+            topic_path
+        ));
+    }
+
+    let spec_filename = format!("{}_spec.md", sanitized_name);
+    let task_filename = format!("{}_task.md", sanitized_name);
+
+    let spec_content = format!(
+        "---\ntitle: {}\nstatus: proposed\ncreated: {}\n---\n\n# {}\n\n## Problem Statement\n\n## Requirements\n\n## Acceptance Criteria\n",
+        sanitized_name,
+        chrono::Local::now().format("%Y-%m-%d"),
+        sanitized_name
+    );
+
+    let tasks_template = read_default_tasks_template();
+
+    fs::write(topic_dir.join(&spec_filename), &spec_content)?;
+    fs::write(topic_dir.join(&task_filename), &tasks_template)?;
+
+    Ok(format!(
+        "✅ Spec '{}' created in {}",
+        sanitized_name, topic_path
+    ))
+}
+
 pub fn run_new_with_metadata(
-    topic: &str,
+    topic_path_str: &str,
     area_str: &str,
     impact: Option<&str>,
     change_type: Option<&str>,
 ) -> Result<String> {
-    let topic_path = topic_path(topic, area_str);
+    let topic_path = crate::fs::spec_dir().join(area_str).join(topic_path_str);
+    let topic_name = topic_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| topic_path_str.to_string());
 
     if topic_path.exists() {
         return Err(anyhow::anyhow!(
             "❌ Topic '{}' already exists in {}.",
-            topic,
+            topic_name,
             area_str
         ));
     }
 
-    ensure_dir(&topic_path)?;
-
-    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area_str);
-    let task_filename = crate::agent::mode::get_task_filename_for_area(area_str);
+    std::fs::create_dir_all(&topic_path)?;
 
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
@@ -55,12 +88,12 @@ pub fn run_new_with_metadata(
 
         format!(
             "---\ntitle: {}\n{}\n{}\n{}\ncreated: {}\n---\n\n# {}\n\n## Problem Statement\n\nWhat problem does this solve?\n\n## Requirements\n\n### Must Have\n- [ ] Requirement 1\n- [ ] Requirement 2\n\n## Acceptance Criteria\n\n- [ ] Criterion 1\n- [ ] Criterion 2\n",
-            topic,
+            topic_name,
             impact_line,
             change_type_line,
             status_line,
             today,
-            topic
+            topic_name
         )
     } else {
         let specs_template = crate::fs::read_area_template(area_str, "specs.md")
@@ -71,8 +104,7 @@ pub fn run_new_with_metadata(
     let tasks_template = crate::fs::read_area_template(area_str, "tasks.md")
         .unwrap_or_else(|| read_default_tasks_template());
 
-    fs::write(topic_path.join(&spec_filename), &spec_content)?;
-    fs::write(topic_path.join(&task_filename), &tasks_template)?;
+    fs::write(topic_path.join("topic.md"), format!("# {}\n", topic_name))?;
 
     let type_info = if let (Some(i), Some(ct)) = (impact, change_type) {
         format!(" ({}: {})", i, ct)
@@ -82,7 +114,7 @@ pub fn run_new_with_metadata(
 
     Ok(format!(
         "✅ Topic '{}' created in {}/{}",
-        topic, area_str, type_info
+        topic_name, area_str, type_info
     ))
 }
 
@@ -1010,19 +1042,30 @@ pub fn auto_checkin(topic: &str, area: &str) -> Result<String> {
 }
 
 pub fn run_delete(topic: &str, area: &str, _force: bool) -> Result<String> {
-    let path = topic_path(topic, area);
+    let path = crate::fs::spec_dir().join(area).join(topic);
     if !path.exists() {
         return Err(anyhow::anyhow!(
-            "❌ Topic '{}' not found in {}.",
+            "❌ Item '{}' not found in {}.",
             topic,
             area
         ));
     }
 
-    // Remove topic dir
-    fs::remove_dir_all(&path)?;
-
-    Ok(format!("✅ Deleted topic '{}' from {}/", topic, area))
+    if path.is_dir() {
+        fs::remove_dir_all(&path)?;
+        Ok(format!("✅ Deleted topic '{}' from {}/", topic, area))
+    } else if path.to_string_lossy().ends_with("_spec.md") {
+        let spec_path = path.clone();
+        let task_path = path.to_string_lossy().replace("_spec.md", "_task.md");
+        fs::remove_file(&spec_path)?;
+        if std::path::Path::new(&task_path).exists() {
+            fs::remove_file(&task_path)?;
+        }
+        Ok(format!("✅ Deleted spec '{}' from {}/", topic, area))
+    } else {
+        fs::remove_file(&path)?;
+        Ok(format!("✅ Deleted item '{}' from {}/", topic, area))
+    }
 }
 
 pub fn run_progress(area_str: Option<&str>) -> Result<()> {

@@ -344,7 +344,12 @@ impl App {
                                         if self.frame % 4 < 1 { "⠋" } else { "⠙" }
                                     } else { "-" };
 
-                                    let arrow = if !t.children.is_empty() { " >" } else { "" };
+                                    let arrow = if t.status == "spec" { "" } else { " >" };
+                                    let progress_str = if t.status == "spec" && t.tasks_total > 0 {
+                                        format!(" ({}/{})", t.tasks_completed, t.tasks_total)
+                                    } else {
+                                        "".to_string()
+                                    };
                                     let topic_display = format!("{:<25}", if t.topic.len() > 25 { format!("{}...", &t.topic[..22]) } else { t.topic.clone() });
 
                                     let current_agent = crate::commands::topic::get_agent_id();
@@ -362,7 +367,7 @@ impl App {
                                         String::new()
                                     };
 
-                                    format!("{} {} {} {} ({}/{}){}{}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow, checkout_info)
+                                    format!("{} {} {} {} ({}/{}){}{}{}", topic_display, status_icon, bar, animation, t.tasks_completed, t.tasks_total, arrow, checkout_info, progress_str)
                                 }
                             };
 
@@ -431,57 +436,63 @@ impl App {
                             self.pending_args.clear();
                         }
                     } else if self.input_prompt == "Name for new topic?" {
-                        let topic_name = self.pending_args[0].clone();
+                        let topic_name = input.clone();
                         let area = self.current_area.as_deref().unwrap_or("Working");
-                        match crate::commands::topic::run_new(&topic_name, area) {
+                        let current_path = match &self.state.nav_state {
+                            NavState::NestedSpecs(ref path) => {
+                                let spec_dir = crate::fs::spec_dir().join(area);
+                                let rel = path.strip_prefix(&spec_dir).unwrap_or(path);
+                                if rel.as_os_str().is_empty() || rel == std::path::Path::new("") {
+                                    topic_name.clone()
+                                } else {
+                                    format!("{}/{}", rel.to_string_lossy(), topic_name)
+                                }
+                            }
+                            _ => topic_name.clone(),
+                        };
+                        match crate::commands::topic::run_new(&current_path, area) {
                             Ok(msg) => {
                                 self.message = Some(msg);
                                 self.trigger_expression(PlatypusState::Happy, 2);
                             }
                             Err(e) => self.message = Some(format!("Error: {}", e)),
                         }
-                        self.state.update_status();
                         self.input_mode = false;
                         self.pending_args.clear();
                     } else if self.input_prompt == "Name for new spec?" {
                         if let Some(area) = &self.current_area {
-                            let area_type = self.get_area_type(area);
+                            let spec_name = input.clone();
+                            let current_path = match &self.state.nav_state {
+                                NavState::NestedSpecs(ref path) => {
+                                    let spec_dir = crate::fs::spec_dir().join(area);
+                                    path.strip_prefix(&spec_dir)
+                                        .unwrap_or(path)
+                                        .to_string_lossy()
+                                        .to_string()
+                                }
+                                _ => "".to_string(),
+                            };
 
-                            if area_type == crate::agent::mode::DisplayType::Roadmap {
-                                self.input_mode = true;
-                                self.input_prompt =
-                                    "Impact (critical/high/medium/low)?".to_string();
+                            if current_path.is_empty() {
+                                self.message =
+                                    Some("❌ Specs must be created inside a topic.".to_string());
                             } else {
-                                let topic_name = self.pending_args[0].clone();
-                                let full_path = match &self.state.nav_state {
-                                    NavState::TopicList(_) => topic_name.clone(),
-                                    NavState::NestedSpecs(ref path) => {
-                                        let spec_dir = crate::fs::spec_dir();
-                                        if let Ok(rel) = path.strip_prefix(spec_dir.join(area)) {
-                                            let parent = rel
-                                                .to_string_lossy()
-                                                .trim_start_matches('/')
-                                                .to_string();
-                                            format!("{}/{}", parent, topic_name)
-                                        } else {
-                                            topic_name.clone()
-                                        }
-                                    }
-                                    _ => topic_name.clone(),
-                                };
-
-                                match crate::commands::topic::run_new(&full_path, area) {
+                                match crate::commands::topic::run_new_spec(
+                                    &spec_name,
+                                    &current_path,
+                                    area,
+                                ) {
                                     Ok(msg) => {
                                         self.message = Some(msg);
                                         self.trigger_expression(PlatypusState::Happy, 2);
                                     }
                                     Err(e) => self.message = Some(format!("Error: {}", e)),
                                 }
-                                self.state.update_status();
-                                self.last_refresh = Instant::now();
-                                self.input_mode = false;
-                                self.pending_args.clear();
                             }
+                            self.state.update_status();
+                            self.last_refresh = Instant::now();
+                            self.input_mode = false;
+                            self.pending_args.clear();
                         }
                         self.message_timer = Some(Instant::now());
                     } else if self.input_prompt == "Impact (critical/high/medium/low)?" {
@@ -538,8 +549,25 @@ impl App {
                                 let impact = self.pending_impact.clone();
                                 let ct = self.pending_change_type.clone();
 
+                                // For specs, we want to create them inside the current topic directory
+                                let spec_name = self.pending_args[0].clone();
+                                let topic_path = match &self.state.nav_state {
+                                    NavState::TopicList(_) => {
+                                        if let Some(topic) = self
+                                            .state
+                                            .topics
+                                            .get(self.list_state.selected().unwrap_or(0))
+                                        {
+                                            format!("{}/{}", topic.relative_path(), spec_name)
+                                        } else {
+                                            spec_name.clone()
+                                        }
+                                    }
+                                    _ => spec_name.clone(),
+                                };
+
                                 match crate::commands::topic::run_new_with_metadata(
-                                    &full_path,
+                                    &topic_path,
                                     area,
                                     impact.as_deref(),
                                     ct.as_deref(),
@@ -636,7 +664,13 @@ impl App {
                                     .get(self.list_state.selected().unwrap_or(0))
                                 {
                                     match crate::commands::topic::run_delete(
-                                        &topic.relative_path(),
+                                        &topic
+                                            .path
+                                            .strip_prefix(crate::fs::spec_dir().join(
+                                                self.current_area.as_deref().unwrap_or("Working"),
+                                            ))
+                                            .unwrap_or(&topic.path)
+                                            .to_string_lossy(),
                                         self.current_area.as_deref().unwrap_or("Working"),
                                         true,
                                     ) {
@@ -845,7 +879,7 @@ impl App {
                         .get(self.list_state.selected().unwrap_or(0))
                         .cloned()
                     {
-                        if !topic.children.is_empty() {
+                        if topic.status != "spec" {
                             self.history
                                 .push((self.state.nav_state.clone(), self.state.topics.clone()));
                             self.state.nav_state = NavState::NestedSpecs(topic.path.clone());
@@ -886,7 +920,7 @@ impl App {
                 }
                 _ => {
                     self.input_mode = true;
-                    self.input_prompt = "Confirm remove spec? (y/N)".to_string();
+                    self.input_prompt = "Confirm remove item? (y/N)".to_string();
                 }
             },
             KeyCode::Char('p') => match &self.state.nav_state {
