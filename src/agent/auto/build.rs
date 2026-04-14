@@ -11,6 +11,7 @@ use uuid::Uuid;
 use super::lock::{clear_lock_for_topic, create_lock, get_lock_for_topic};
 use super::minigit::{create_commit, get_commits, Commit};
 use super::pr::run_pr_merge;
+use crate::commands::topic as topic_cmd;
 use crate::fs::spec_dir;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +94,63 @@ fn delete_build_state(topic: &str) -> Result<()> {
         fs::remove_file(&path)?;
     }
     Ok(())
+}
+
+fn get_project_root() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+fn ensure_src_dir() -> Result<PathBuf> {
+    let src_dir = get_project_root().join("src");
+    if !src_dir.exists() {
+        fs::create_dir_all(&src_dir)?;
+        println!("Created /src directory at project root for code files");
+    } else {
+        println!("Using existing /src directory at project root");
+    }
+    Ok(src_dir)
+}
+
+fn find_queue_topic(staging_area: &str) -> Option<String> {
+    // queue.md is in the area root (e.g., Staging/queue.md), not in topic folders
+    let queue_file = crate::agent::mode::get_readiness_queue_file();
+    let queue_path = spec_dir().join(staging_area).join(&queue_file);
+
+    if queue_path.exists() {
+        // Read the first topic from the queue
+        if let Ok(content) = fs::read_to_string(&queue_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("- ") {
+                    let topic_name = trimmed.trim_start_matches("- ").trim().to_string();
+                    if !topic_name.is_empty() {
+                        return Some(topic_name);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn read_queue_items(area: &str) -> Vec<String> {
+    // Read from area-level queue.md (e.g., Working/queue.md)
+    let queue_file = crate::agent::mode::get_readiness_queue_file();
+    let queue_path = spec_dir().join(area).join(&queue_file);
+
+    if let Ok(content) = fs::read_to_string(&queue_path) {
+        return content
+            .lines()
+            .filter(|l| l.trim().starts_with("- "))
+            .map(|l| l.trim().trim_start_matches("- ").to_string())
+            .collect();
+    }
+    vec![]
+}
+
+fn push_topic_to_working(topic: &str, source_area: &str) -> Result<String> {
+    let result = topic_cmd::run_push(topic, "Working", Some(source_area))?;
+    Ok(result)
 }
 
 fn get_topics_from_spec(topic: &str, area: &str) -> Result<Vec<String>> {
@@ -210,28 +268,62 @@ fn spawn_build_agent(
 }
 
 pub fn run_auto_build(
-    topic: &str,
+    topic: Option<&str>,
     area: Option<&str>,
     spec_file: Option<&str>,
 ) -> Result<BuildResult> {
-    let area = area.unwrap_or("Working");
-    let topic_path = spec_dir().join(area).join(topic);
+    let staging_area = "Staging";
+    let working_area = "Working";
+
+    // Step 1: Find topic with queue.md in Staging (the ROOT topic)
+    let queue_topic = find_queue_topic(staging_area);
+
+    let root_topic = match queue_topic {
+        Some(qt) => qt,
+        None => {
+            // If no topic provided and no queue topic found, error
+            if topic.is_none() {
+                return Err(anyhow::anyhow!(
+                    "No topic with queue.md found in Staging. Cannot auto-build.\nCreate a topic with queue.md inside it first."
+                ));
+            }
+            // Fall back to provided topic
+            topic.unwrap().to_string()
+        }
+    };
+
+    // Step 1b: Ensure /src directory exists BEFORE pushing to Working
+    println!("Ensuring /src directory exists at project root...");
+    ensure_src_dir()?;
+
+    // Step 2: Push the entire root topic from Staging to Working (includes all children)
+    println!("Found root topic '{}' with queue.md in Staging", root_topic);
+    println!(
+        "Pushing '{}' (including all sub-topics) from Staging to Working",
+        root_topic
+    );
+    push_topic_to_working(&root_topic, staging_area)?;
+
+    // Work on the root topic in Working area
+    let work_area = working_area;
+
+    let topic_path = spec_dir().join(work_area).join(&root_topic);
     if !topic_path.exists() {
         return Err(anyhow::anyhow!(
             "Topic '{}' does not exist in area '{}'",
-            topic,
-            area
+            root_topic,
+            work_area
         ));
     }
 
-    if let Some(lock) = get_lock_for_topic(topic)? {
-        println!("Found existing lock for topic: {}", topic);
+    if let Some(lock) = get_lock_for_topic(&root_topic)? {
+        println!("Found existing lock for topic: {}", root_topic);
         println!("Last task: {}", lock.last_task);
         println!("Error: {}", lock.error_message);
 
         return Ok(BuildResult {
-            topic: topic.to_string(),
-            area: area.to_string(),
+            topic: root_topic.to_string(),
+            area: work_area.to_string(),
             tasks_total: 0,
             tasks_completed: 0,
             tasks_failed: 0,
@@ -241,7 +333,7 @@ pub fn run_auto_build(
             pr_status: "blocked".to_string(),
             pr_report: "Build blocked by existing lock".to_string(),
             failed_tasks: vec![FailedTask {
-                topic: topic.to_string(),
+                topic: root_topic.to_string(),
                 error: lock.error_message.clone(),
                 timestamp: lock.timestamp.clone(),
             }],
@@ -250,12 +342,14 @@ pub fn run_auto_build(
         });
     }
 
-    parse_spec_tasks(topic, area)?;
-    let subtasks = get_topics_from_spec(topic, area)?;
+    // Step 3: Get tasks from queue.md (central to-do list) in Working
+    let subtasks = read_queue_items(working_area);
+
+    println!("Tasks from queue: {:?}", subtasks);
 
     let state = BuildState {
-        topic: topic.to_string(),
-        area: area.to_string(),
+        topic: root_topic.to_string(),
+        area: work_area.to_string(),
         tasks: subtasks
             .iter()
             .map(|t| BuildTask {
@@ -270,6 +364,9 @@ pub fn run_auto_build(
 
     save_build_state(&state)?;
 
+    // Ensure /src directory exists for source files
+    ensure_src_dir()?;
+
     let mut tasks_completed: u32 = 0;
     let tasks_failed: u32 = 0;
     let mut failed_tasks = Vec::new();
@@ -278,21 +375,21 @@ pub fn run_auto_build(
 
     let root_session_id = Uuid::new_v4().to_string();
 
-    spawn_build_agent(topic, area, None, &root_session_id)?;
+    spawn_build_agent(&root_topic, work_area, None, &root_session_id)?;
 
     tasks_completed += 1;
 
     for subtask in &subtasks {
         let session_id = Uuid::new_v4().to_string();
 
-        let subtask_topic = format!("{}/{}", topic, subtask);
+        let subtask_topic = format!("{}/{}", root_topic, subtask);
 
-        spawn_build_agent(&subtask_topic, area, Some(topic), &session_id)?;
+        spawn_build_agent(&subtask_topic, work_area, Some(&root_topic), &session_id)?;
 
         let commit = create_commit(
             &session_id,
             &subtask_topic,
-            Some(topic),
+            Some(&root_topic),
             &format!("Built subtask: {}", subtask),
             vec![],
         )?;
@@ -302,23 +399,23 @@ pub fn run_auto_build(
         tasks_completed += 1;
     }
 
-    delete_build_state(topic)?;
+    delete_build_state(&root_topic)?;
 
-    println!("Running PR merge for topic: {}", topic);
-    let pr_result = run_pr_merge(topic)?;
+    println!("Running PR merge for topic: {}", root_topic);
+    let pr_result = run_pr_merge(&root_topic)?;
 
     if pr_result.status == "conflicts" || pr_result.status == "partial" {
         let lock = create_lock(
             &root_session_id,
-            topic,
+            &root_topic,
             None,
             "PR merge conflicts",
             &pr_result.report,
         )?;
 
         return Ok(BuildResult {
-            topic: topic.to_string(),
-            area: area.to_string(),
+            topic: root_topic.to_string(),
+            area: work_area.to_string(),
             tasks_total: (subtasks.len() as u32) + 1,
             tasks_completed,
             tasks_failed,
@@ -334,8 +431,8 @@ pub fn run_auto_build(
     }
 
     Ok(BuildResult {
-        topic: topic.to_string(),
-        area: area.to_string(),
+        topic: root_topic.to_string(),
+        area: work_area.to_string(),
         tasks_total: (subtasks.len() as u32) + 1,
         tasks_completed,
         tasks_failed,
@@ -400,7 +497,8 @@ pub fn resume_auto_build(topic: &str) -> Result<BuildResult> {
             lock_message: None,
         })
     } else {
-        run_auto_build(topic, None, None)
+        // Resume mode - use provided topic as the root
+        run_auto_build(Some(topic), None, None)
     }
 }
 

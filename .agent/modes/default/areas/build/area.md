@@ -1,4 +1,10 @@
+---
+area: Build
+short: Final specs for code generated.
+---
+
 # Build
+
 
 ## Purpose
 The final destination for verified, production-ready specifications and code. This area is immutable; no edits are permitted here.

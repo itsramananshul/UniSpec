@@ -1,3 +1,8 @@
+---
+area: Example
+short: <Add a one-liner description here>
+---
+
 # {{area_name}}
 
 ## Purpose

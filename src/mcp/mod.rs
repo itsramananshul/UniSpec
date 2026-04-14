@@ -27,20 +27,22 @@ pub fn get_tools() -> Vec<Tool> {
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 }
             }),
         },
         Tool {
             name: "topics_add".to_string(),
-            description: "Create a new topic in an area".to_string(),
+            description: "⚠️ CREATES topic.md FILE WITH FRONTMATTER. You MUST provide: topic, area, content, AND short (one-liner description). Usage: topics_add { topic: \"name\", area: \"Staging\", short: \"What this is in one line\", content: \"WRITE THE ACTUAL CONTENT HERE\" }".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "topic": { "type": "string", "description": "Topic name (e.g., 'myproject')" },
+                    "area": { "type": "string", "description": "Area name (e.g., 'Staging')" },
+                    "short": { "type": "string", "description": "⚠️ REQUIRED: One-line description (e.g., 'Web app for managing tasks')" },
+                    "content": { "type": "string", "description": "⚠️ REQUIRED: The full topic content" }
                 },
-                "required": ["topic"]
+                "required": ["topic", "area", "short", "content"]
             }),
         },
         Tool {
@@ -50,7 +52,7 @@ pub fn get_tools() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" },
+                    "area": { "type": "string", "description": "Area name (default: Staging)" },
                     "force": { "type": "boolean", "description": "Skip confirmation" }
                 },
                 "required": ["topic"]
@@ -63,9 +65,22 @@ pub fn get_tools() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "read_asset".to_string(),
+            description: "Read a topic.md, spec, or task file. Use asset_type: 'topic', 'spec', or 'task'".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic name" },
+                    "asset_type": { "type": "string", "description": "Asset type: 'topic', 'spec', or 'task'" },
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
+                },
+                "required": ["topic", "asset_type"]
             }),
         },
         Tool {
@@ -99,7 +114,7 @@ pub fn get_tools() -> Vec<Tool> {
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 }
             }),
         },
@@ -124,7 +139,7 @@ pub fn get_tools() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic"]
             }),
@@ -138,7 +153,7 @@ pub fn get_tools() -> Vec<Tool> {
                     "topic": { "type": "string", "description": "Topic name" },
                     "task_index": { "type": "integer", "description": "Task index (0-based)" },
                     "note": { "type": "string", "description": "Optional note" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic", "task_index"]
             }),
@@ -152,7 +167,7 @@ pub fn get_tools() -> Vec<Tool> {
                     "topic": { "type": "string", "description": "Topic name" },
                     "task_index": { "type": "integer", "description": "Task index (0-based)" },
                     "note": { "type": "string", "description": "Optional note" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic", "task_index"]
             }),
@@ -165,7 +180,7 @@ pub fn get_tools() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic"]
             }),
@@ -178,22 +193,25 @@ pub fn get_tools() -> Vec<Tool> {
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
                     "note": { "type": "string", "description": "Note content to add" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic", "note"]
             }),
         },
-        // === Spec Add (creates from templates) ===
+        // === Spec Add (creates spec and task files) ===
         Tool {
             name: "spec_add".to_string(),
-            description: "Create spec.md and task.md files from templates for a topic".to_string(),
+            description: "⚠️ CREATES SPEC.MD AND TASK.MD WITH FRONTMATTER. You MUST provide: topic, area, short, spec_content, AND task_content. Usage: spec_add { topic: \"name\", area: \"Staging\", short: \"What this feature does in one line\", spec_content: \"WRITE THE SPEC CONTENT\", task_content: \"WRITE THE TASKS CONTENT\" }".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "topic": { "type": "string", "description": "Topic name (e.g., 'myproject/auth')" },
+                    "area": { "type": "string", "description": "Area name (e.g., 'Staging')" },
+                    "short": { "type": "string", "description": "⚠️ REQUIRED: One-line description of this spec (e.g., 'User authentication with JWT')" },
+                    "spec_content": { "type": "string", "description": "⚠️ REQUIRED: The full spec content" },
+                    "task_content": { "type": "string", "description": "⚠️ REQUIRED: The full tasks content" }
                 },
-                "required": ["topic"]
+                "required": ["topic", "area", "short", "spec_content", "task_content"]
             }),
         },
         // === Spec Writing ===
@@ -204,48 +222,37 @@ pub fn get_tools() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" },
+                    "area": { "type": "string", "description": "Area name (default: Staging)" },
                     "content": { "type": "string", "description": "Full spec.md content" }
                 },
                 "required": ["topic", "content"]
             }),
         },
-        Tool {
-            name: "spec_read".to_string(),
-            description: "Read spec.md content for a topic".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
-                },
-                "required": ["topic"]
-            }),
-        },
-        // === Task Writing ===
+        // === Task Writing (requires spec to already exist!) ===
         Tool {
             name: "task_write".to_string(),
-            description: "Write task.md content for a topic".to_string(),
+            description: "Write task.md content for a topic. REQUIREMENT: Spec file must already exist for this topic!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" },
+                    "topic": { "type": "string", "description": "Topic name (must have existing spec file)" },
+                    "area": { "type": "string", "description": "Area name (default: Staging)" },
                     "content": { "type": "string", "description": "Full task.md content" }
                 },
                 "required": ["topic", "content"]
             }),
         },
         Tool {
-            name: "task_read".to_string(),
-            description: "Read task.md content for a topic".to_string(),
+            name: "task_status".to_string(),
+            description: "Update task status (pending, working, complete)".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" },
+                    "status": { "type": "string", "description": "Status: pending, working, or complete" }
                 },
-                "required": ["topic"]
+                "required": ["topic", "status"]
             }),
         },
         // === Task Queue (Master Task) ===
@@ -255,7 +262,7 @@ pub fn get_tools() -> Vec<Tool> {
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 }
             }),
         },
@@ -267,7 +274,7 @@ pub fn get_tools() -> Vec<Tool> {
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name to add" },
                     "position": { "type": "integer", "description": "Position in queue (0=first, -1=last)" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic"]
             }),
@@ -279,7 +286,19 @@ pub fn get_tools() -> Vec<Tool> {
                 "type": "object",
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name to remove" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
+                },
+                "required": ["topic"]
+            }),
+        },
+        Tool {
+            name: "queue_check".to_string(),
+            description: "Check if a topic is ready to be pushed (in the readiness queue)".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "topic": { "type": "string", "description": "Topic name to check" },
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic"]
             }),
@@ -292,7 +311,7 @@ pub fn get_tools() -> Vec<Tool> {
                 "properties": {
                     "topic": { "type": "string", "description": "Topic to move" },
                     "new_position": { "type": "integer", "description": "New position (0-based)" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["topic", "new_position"]
             }),
@@ -306,7 +325,7 @@ pub fn get_tools() -> Vec<Tool> {
                 "properties": {
                     "topic": { "type": "string", "description": "Topic name" },
                     "path": { "type": "string", "description": "File path to link" },
-                    "area": { "type": "string", "description": "Area (default: Working)" },
+                    "area": { "type": "string", "description": "Area (default: Staging)" },
                     "link_type": { "type": "string", "description": "Link type (implementation, test, config, docs)" },
                     "tags": { "type": "string", "description": "Comma-separated tags" },
                     "annotation": { "type": "string", "description": "Brief annotation" }
@@ -323,7 +342,7 @@ pub fn get_tools() -> Vec<Tool> {
                     "spec_path": { "type": "string", "description": "Spec file path" },
                     "file_path": { "type": "string", "description": "Code file path to bind" },
                     "topic": { "type": "string", "description": "Topic name" },
-                    "area": { "type": "string", "description": "Area name (default: Working)" }
+                    "area": { "type": "string", "description": "Area name (default: Staging)" }
                 },
                 "required": ["spec_path", "file_path", "topic"]
             }),

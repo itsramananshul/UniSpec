@@ -17,6 +17,8 @@ pub struct AreaTypesConfig {
     pub working: Option<AreaTypeConfig>,
     #[serde(default)]
     pub build: Option<AreaTypeConfig>,
+    #[serde(default)]
+    pub specing: Option<AreaTypeConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +59,8 @@ pub enum DisplayType {
     Working,
     #[serde(rename = "build")]
     Build,
+    #[serde(rename = "specing")]
+    Specing,
     #[serde(rename = "standard")]
     Standard,
 }
@@ -73,6 +77,7 @@ impl DisplayType {
             "roadmap" => DisplayType::Roadmap,
             "working" => DisplayType::Working,
             "build" => DisplayType::Build,
+            "specing" => DisplayType::Specing,
             _ => DisplayType::Standard,
         }
     }
@@ -185,6 +190,8 @@ pub struct ModeConfig {
     #[serde(default)]
     pub requirements: Requirements,
     #[serde(default)]
+    pub readiness: ReadinessConfig,
+    #[serde(default)]
     pub areas: AreasConfig,
     #[serde(default)]
     pub capabilities: Capabilities,
@@ -198,6 +205,26 @@ pub struct ModeConfig {
     pub area_types: AreaTypesConfig,
     #[serde(default)]
     pub topic_order: TopicOrderConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReadinessConfig {
+    #[serde(default)]
+    pub queue_file: Option<String>,
+    #[serde(default)]
+    pub required_for_push: Option<bool>,
+    #[serde(default)]
+    pub areas: Vec<String>,
+    #[serde(default)]
+    pub area_filters: HashMap<String, AreaFileFilter>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AreaFileFilter {
+    #[serde(default)]
+    pub push_files: Vec<String>,
+    #[serde(default)]
+    pub delete_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -880,4 +907,57 @@ pub fn remove_mode(name: &str, global: bool) -> Result<String> {
         name,
         if global { "global" } else { "local" }
     ))
+}
+
+/// Get the readiness queue file name from current mode's config
+pub fn get_readiness_queue_file() -> String {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            if let Some(ref queue_file) = config.readiness.queue_file {
+                return queue_file.clone();
+            }
+        }
+    }
+    "queue.md".to_string()
+}
+
+/// Check if readiness is required for push
+pub fn is_readiness_required_for_push() -> bool {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            return config.readiness.required_for_push.unwrap_or(false);
+        }
+    }
+    false
+}
+
+/// Get the areas where readiness is required (from mode.toml)
+pub fn get_readiness_areas() -> Vec<String> {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            return config.readiness.areas.clone();
+        }
+    }
+    vec![]
+}
+
+/// Check if a specific area requires readiness check
+pub fn area_requires_readiness(area: &str) -> bool {
+    if !is_readiness_required_for_push() {
+        return false;
+    }
+    let areas = get_readiness_areas();
+    let area_lower = area.to_lowercase();
+    areas.iter().any(|a| a.to_lowercase() == area_lower)
+}
+
+/// Get the file filter for an area (what files get pushed vs deleted)
+pub fn get_area_file_filter(area: &str) -> Option<AreaFileFilter> {
+    if let Ok(mode_name) = current_mode() {
+        if let Ok(config) = get_mode_info(&mode_name) {
+            let area_lower = area.to_lowercase();
+            return config.readiness.area_filters.get(&area_lower).cloned();
+        }
+    }
+    None
 }

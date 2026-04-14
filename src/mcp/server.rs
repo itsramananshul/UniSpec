@@ -9,7 +9,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let topics = crate::fs::spec_dir().join(area);
             if !topics.exists() {
                 return Ok(
@@ -21,7 +21,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let mut topic_list = vec![];
             for entry in std::fs::read_dir(&topics)? {
                 let entry = entry?;
-                if entry.path().is_dir() {
+                if entry.path().is_dir() && entry.path().join("topic.md").exists() {
                     let name = entry.file_name().to_string_lossy().to_string();
                     let spec_path = entry.path().join(&spec_filename);
                     let task_path = entry.path().join(&task_filename);
@@ -55,9 +55,163 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
-            let result = crate::commands::topic::run_new(topic, area)?;
-            Ok(json!({ "success": true, "message": result, "topic": topic, "area": area }))
+                .unwrap_or("Staging");
+            let provided_content = args
+                .get("content")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| s.len() > 10)  // Require meaningful content
+                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! topics_add requires meaningful content (at least 10 characters of actual text)!\n\nYour content was empty or too short. Include actual description like:\n\ntopics_add {{ topic: \"myproject\", area: \"Staging\", content: \"# myproject\\n\\n## Overview\\nThis is a web app that does X, Y, Z.\" }}"))?;
+
+            // Create topic directory
+            let topic_path = crate::fs::spec_dir().join(area).join(topic);
+            if topic_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Topic '{}' already exists in {}",
+                    topic,
+                    area
+                ));
+            }
+            std::fs::create_dir_all(&topic_path)?;
+
+            // Strip any existing frontmatter from provided content
+            let cleaned_content = if provided_content.trim_start().starts_with("---") {
+                if let Some(end) = provided_content.find("\n---") {
+                    &provided_content[end + 5..]
+                } else {
+                    provided_content
+                }
+            } else {
+                provided_content
+            };
+
+            // Prepend frontmatter with metadata
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let author = crate::commands::topic::get_agent_id();
+            let short = args
+                .get("short")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! topics_add requires 'short' parameter!\n\nExample: topics_add {{ topic: \"myproject\", area: \"Staging\", short: \"A web app for managing tasks\", content: \"...\" }}"))?;
+
+            let frontmatter = format!(
+                "---\ntitle: {}\nshort: {}\ncreated: {}\nauthor: {}\n---\n\n",
+                topic, short, now, author
+            );
+
+            let full_content = format!("{}{}", frontmatter, cleaned_content.trim_start());
+
+            // Write topic.md with frontmatter prepended
+            std::fs::write(topic_path.join("topic.md"), full_content)?;
+
+            Ok(
+                json!({ "success": true, "message": format!("Topic '{}' created in {}/", topic, area), "topic": topic, "area": area }),
+            )
+        }
+        "read_asset" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let asset_type = args
+                .get("asset_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("topic");
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+
+            // Special case: read from templates directory
+            if topic == "templates" {
+                let template_dir = std::path::PathBuf::from(".agent/modes/default/templates");
+                let filename = match asset_type {
+                    "spec" => "spec.md",
+                    "task" => "task.md",
+                    "area" => "area.md",
+                    _ => "topic.md",
+                };
+                let template_path = template_dir.join(filename);
+                if template_path.exists() {
+                    let content = std::fs::read_to_string(&template_path)?;
+                    return Ok(
+                        json!({ "success": true, "topic": "templates", "asset_type": asset_type, "content": content }),
+                    );
+                } else {
+                    return Err(anyhow::anyhow!("Template file not found: {}", filename));
+                }
+            }
+
+            let file_path = match asset_type {
+                "spec" => {
+                    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+                    let spec_path_upper = crate::fs::spec_dir()
+                        .join(area)
+                        .join(topic)
+                        .join(&spec_filename);
+                    let spec_path_lower = crate::fs::spec_dir()
+                        .join(area.to_lowercase())
+                        .join(topic)
+                        .join(&spec_filename);
+                    if spec_path_upper.exists() {
+                        spec_path_upper
+                    } else if spec_path_lower.exists() {
+                        spec_path_lower
+                    } else {
+                        return Err(anyhow::anyhow!(
+                            "Spec file not found for topic '{}' in area '{}'",
+                            topic,
+                            area
+                        ));
+                    }
+                }
+                "task" => {
+                    let task_filename = crate::agent::mode::get_task_filename_for_area(area);
+                    let task_path_upper = crate::fs::spec_dir()
+                        .join(area)
+                        .join(topic)
+                        .join(&task_filename);
+                    let task_path_lower = crate::fs::spec_dir()
+                        .join(area.to_lowercase())
+                        .join(topic)
+                        .join(&task_filename);
+                    if task_path_upper.exists() {
+                        task_path_upper
+                    } else if task_path_lower.exists() {
+                        task_path_lower
+                    } else {
+                        return Err(anyhow::anyhow!(
+                            "Task file not found for topic '{}' in area '{}'",
+                            topic,
+                            area
+                        ));
+                    }
+                }
+                _ => {
+                    let topic_path_upper = crate::fs::spec_dir()
+                        .join(area)
+                        .join(topic)
+                        .join("topic.md");
+                    let topic_path_lower = crate::fs::spec_dir()
+                        .join(area.to_lowercase())
+                        .join(topic)
+                        .join("topic.md");
+                    if topic_path_upper.exists() {
+                        topic_path_upper
+                    } else if topic_path_lower.exists() {
+                        topic_path_lower
+                    } else {
+                        return Err(anyhow::anyhow!(
+                            "Topic '{}' does not exist in area '{}'",
+                            topic,
+                            area
+                        ));
+                    }
+                }
+            };
+
+            let content = std::fs::read_to_string(&file_path)?;
+            Ok(
+                json!({ "success": true, "topic": topic, "area": area, "asset_type": asset_type, "content": content }),
+            )
         }
         "topics_show" => {
             let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
@@ -100,7 +254,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 }
                 Ok(json!({ "success": true, "topic": topic, "areas": area_topics }))
             } else {
-                let area = from_area.unwrap_or("Working");
+                let area = from_area.unwrap_or("Staging");
                 let topic_path = crate::fs::spec_dir().join(area).join(topic);
                 if !topic_path.exists() {
                     return Err(anyhow::anyhow!(
@@ -141,7 +295,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(true);
             let result = crate::commands::topic::run_delete(topic, area, force)?;
             Ok(json!({ "success": true, "message": result }))
@@ -149,10 +303,40 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
         "topics_push" => {
             let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
             let target_area = args.get("area").and_then(|v| v.as_str()).unwrap();
-            let source_area = args.get("source_area").and_then(|v| v.as_str());
-            let result = crate::commands::topic::run_push(topic, target_area, source_area)?;
+            let source_area = args
+                .get("source_area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+
+            // Check readiness - only for Staging and Fixing areas when configured in mode.toml
+            if crate::agent::mode::area_requires_readiness(source_area) {
+                let queue_file = crate::agent::mode::get_readiness_queue_file();
+                let area_queue_path = crate::fs::spec_dir().join(source_area).join(&queue_file);
+
+                let is_in_queue = if area_queue_path.exists() {
+                    if let Ok(queue_content) = std::fs::read_to_string(&area_queue_path) {
+                        queue_content.lines().any(|line| {
+                            let trimmed = line.trim();
+                            trimmed.starts_with("- ") && trimmed.contains(topic)
+                        })
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if !is_in_queue {
+                    return Err(anyhow::anyhow!(
+                        "❌ Topic '{}' is not ready to push. It must be listed in {}/{}.\nThis is only required for Staging/Fixing areas.",
+                        topic, source_area, queue_file
+                    ));
+                }
+            }
+
+            let result = crate::commands::topic::run_push(topic, target_area, Some(source_area))?;
             Ok(
-                json!({ "success": true, "message": result, "topic": topic, "from": source_area.unwrap_or("Working"), "to": target_area }),
+                json!({ "success": true, "message": result, "topic": topic, "from": source_area, "to": target_area }),
             )
         }
         "topics_pull" => {
@@ -167,7 +351,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let spec_dir = crate::fs::spec_dir().join(&area);
             if !spec_dir.exists() {
                 return Ok(
@@ -341,7 +525,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let link_type = args
                 .get("link_type")
                 .and_then(|v| v.as_str())
@@ -385,7 +569,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
             let task_filename = crate::agent::mode::get_task_filename_for_area(area);
             let spec_path = crate::fs::spec_dir()
@@ -410,7 +594,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let task_filename = crate::agent::mode::get_task_filename_for_area(area);
             let path = crate::fs::spec_dir()
                 .join(area)
@@ -450,7 +634,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let path = args.get("path").and_then(|v| v.as_str()).unwrap();
             let content = args.get("content").and_then(|v| v.as_str()).unwrap();
 
@@ -482,8 +666,8 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
-            let result = crate::agent::auto::build::run_auto_build(topic, Some(area), None)?;
+                .unwrap_or("Staging");
+            let result = crate::agent::auto::build::run_auto_build(Some(topic), Some(area), None)?;
             Ok(json!({ "success": true, "result": format!("{:?}", result) }))
         }
         "unispec_auto_verify" => {
@@ -499,7 +683,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             crate::fs::spec::bind_spec_to_file(
                 std::path::Path::new(spec_path),
                 file_path,
@@ -683,10 +867,12 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let content = args.get("content").and_then(|v| v.as_str()).unwrap();
 
-            let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+            // Filename is <topic>_spec.md (e.g., "auth-login_spec.md")
+            let topic_safe = topic.replace("/", "-").replace(" ", "-");
+            let spec_filename = format!("{}_spec.md", topic_safe);
 
             // Try lowercase first, then uppercase
             let spec_dir_candidate = crate::fs::spec_dir().join(area.to_lowercase()).join(topic);
@@ -697,50 +883,41 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 if upper.exists() {
                     upper
                 } else {
-                    std::fs::create_dir_all(&spec_dir_candidate)?;
-                    spec_dir_candidate
+                    return Err(anyhow::anyhow!(
+                        "Topic '{}' does not exist in area '{}'",
+                        topic,
+                        area
+                    ));
                 }
             };
 
-            let spec_path = spec_dir.join(&spec_filename);
-            std::fs::write(&spec_path, content)?;
-            Ok(
-                json!({ "success": true, "message": "Spec written", "topic": topic, "area": area, "file": spec_filename }),
-            )
-        }
-        "spec_read" => {
-            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
-            let area = args
-                .get("area")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Working");
-
-            let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
-
-            // Try both lowercase and uppercase
-            let spec_path_lower = crate::fs::spec_dir()
-                .join(area.to_lowercase())
-                .join(topic)
-                .join(&spec_filename);
-            let spec_path_upper = crate::fs::spec_dir()
-                .join(area)
-                .join(topic)
-                .join(&spec_filename);
-
-            let spec_path = if spec_path_upper.exists() {
-                spec_path_upper
-            } else if spec_path_lower.exists() {
-                spec_path_lower
+            // Strip any existing frontmatter from content
+            let cleaned_content = if content.trim_start().starts_with("---") {
+                if let Some(end) = content.find("\n---") {
+                    &content[end + 5..]
+                } else {
+                    content
+                }
             } else {
-                return Err(anyhow::anyhow!(
-                    "Spec file not found for topic '{}' in area '{}'",
-                    topic,
-                    area
-                ));
+                content
             };
 
-            let content = std::fs::read_to_string(&spec_path)?;
-            Ok(json!({ "success": true, "topic": topic, "area": area, "content": content }))
+            // Prepend frontmatter with metadata
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let author = crate::commands::topic::get_agent_id();
+
+            let frontmatter = format!(
+                "---\ntitle: {}\ncreated: {}\nauthor: {}\nstatus: draft\n---\n\n",
+                topic, now, author
+            );
+
+            let full_content = format!("{}{}", frontmatter, cleaned_content.trim_start());
+
+            let spec_path = spec_dir.join(&spec_filename);
+            std::fs::write(&spec_path, full_content)?;
+            Ok(
+                json!({ "success": true, "message": "Spec written with frontmatter", "topic": topic, "area": area, "file": spec_filename }),
+            )
         }
         // === Task Writing ===
         "task_write" => {
@@ -748,10 +925,12 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
             let content = args.get("content").and_then(|v| v.as_str()).unwrap();
 
-            let task_filename = crate::agent::mode::get_task_filename_for_area(area);
+            // Filename is <topic>_task.md (e.g., "auth-login_task.md")
+            let topic_safe = topic.replace("/", "-").replace(" ", "-");
+            let task_filename = format!("{}_task.md", topic_safe);
 
             // Try lowercase first, then uppercase
             let spec_dir_candidate = crate::fs::spec_dir().join(area.to_lowercase()).join(topic);
@@ -762,10 +941,23 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 if upper.exists() {
                     upper
                 } else {
-                    std::fs::create_dir_all(&spec_dir_candidate)?;
-                    spec_dir_candidate
+                    return Err(anyhow::anyhow!(
+                        "Topic '{}' does not exist in area '{}'",
+                        topic,
+                        area
+                    ));
                 }
             };
+
+            // Check that spec file exists (can't have task without spec!)
+            let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+            let spec_path = spec_dir.join(&spec_filename);
+            if !spec_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "🚫 Cannot create task without spec! Spec file '{}' does not exist for topic '{}'.\n\nUse spec_add to create BOTH spec and task together:\n\nspec_add {{ topic: \"{}\", area: \"{}\", content: \"# Design: ...\", task_content: \"# Tasks: ...\" }}",
+                    spec_filename, topic, topic, area
+                ));
+            }
 
             let task_path = spec_dir.join(&task_filename);
             std::fs::write(&task_path, content)?;
@@ -773,16 +965,46 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 json!({ "success": true, "message": "Task file written", "topic": topic, "area": area, "file": task_filename }),
             )
         }
-        "task_read" => {
+        "task_status" => {
             let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
+            let status = args
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("pending");
 
-            let task_filename = crate::agent::mode::get_task_filename_for_area(area);
+            // Validate status
+            let valid_status = match status {
+                "pending" | "working" | "complete" => status,
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Invalid status '{}'. Use: pending, working, or complete",
+                        status
+                    ))
+                }
+            };
 
-            // Try both lowercase and uppercase
+            // Find task file
+            let topic_safe = topic.replace("/", "-").replace(" ", "-");
+            let task_filename = format!("{}_task.md", topic_safe);
+
+            // Check spec exists (can't update task without spec!)
+            let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+            let spec_dir_lower = crate::fs::spec_dir().join(area.to_lowercase()).join(topic);
+            let spec_dir_upper = crate::fs::spec_dir().join(area).join(topic);
+            let spec_path_lower = spec_dir_lower.join(&spec_filename);
+            let spec_path_upper = spec_dir_upper.join(&spec_filename);
+
+            if !spec_path_lower.exists() && !spec_path_upper.exists() {
+                return Err(anyhow::anyhow!(
+                    "🚫 Cannot update task without spec! Spec file '{}' does not exist for topic '{}'.\n\nUse spec_add to create BOTH spec and task together first.",
+                    spec_filename, topic
+                ));
+            }
+
             let task_path_lower = crate::fs::spec_dir()
                 .join(area.to_lowercase())
                 .join(topic)
@@ -804,8 +1026,29 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 ));
             };
 
+            // Read file, update status in frontmatter
             let content = std::fs::read_to_string(&task_path)?;
-            Ok(json!({ "success": true, "topic": topic, "area": area, "content": content }))
+            let new_content = content
+                .lines()
+                .map(|line| {
+                    if line.trim().starts_with("status:") {
+                        format!("status: {}", valid_status)
+                    } else {
+                        line.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            std::fs::write(&task_path, new_content)?;
+
+            Ok(json!({
+                "success": true,
+                "message": format!("Task status updated to '{}'", valid_status),
+                "topic": topic,
+                "area": area,
+                "status": valid_status
+            }))
         }
         // === Spec Add (creates <topic>_spec.md and <topic>_task.md from templates) ===
         "spec_add" => {
@@ -813,7 +1056,39 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Working");
+                .unwrap_or("Staging");
+            let provided_content = args
+                .get("spec_content")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| s.len() > 10)
+                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! spec_add requires meaningful spec_content (at least 10 characters)!\n\nYour 'spec_content' was empty or too short. Include actual spec like:\n\nspec_add {{ topic: \"myproject/auth\", area: \"Staging\", short: \"Description\", spec_content: \"# Design: myproject/auth\\n\\n## Overview\\n> User auth system...\", task_content: \"# Tasks: myproject/auth\\n\\n- [ ] Task 1\" }}"))?;
+            let provided_task_content = args
+                .get("task_content")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| s.len() > 10)
+                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! spec_add requires meaningful task_content (at least 10 characters)!\n\nYour 'task_content' was empty or too short. Include actual tasks like:\n\nspec_add {{ topic: \"myproject/auth\", area: \"Staging\", short: \"Description\", spec_content: \"# Design: myproject/auth\\n\\n## Overview\\n> ...\", task_content: \"# Tasks: myproject/auth\\n\\n- [ ] Task 1\" }}"))?;
+
+            // Check if topic contains "/" (nested path)
+            if topic.contains('/') {
+                // For nested paths like "auth/login", check that parent exists
+                let parts: Vec<&str> = topic.split('/').collect();
+                if parts.len() >= 2 {
+                    let parent_topic = parts[0];
+                    let spec_dir_path = crate::fs::spec_dir().join(area).join(parent_topic);
+                    let spec_dir_path_lower = crate::fs::spec_dir()
+                        .join(area.to_lowercase())
+                        .join(parent_topic);
+
+                    if !spec_dir_path.exists() && !spec_dir_path_lower.exists() {
+                        return Err(anyhow::anyhow!(
+                            "Parent topic '{}' does not exist. Create it first with: topics_add {{topic: \"{}\", area: \"{}\"}}",
+                            parent_topic, parent_topic, area
+                        ));
+                    }
+                }
+            }
 
             // Create safe filename from topic (replace / with _)
             let topic_safe = topic.replace("/", "-").replace(" ", "-");
@@ -822,7 +1097,7 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             let spec_filename = format!("{}_spec.md", topic_safe);
             let task_filename = format!("{}_task.md", topic_safe);
 
-            // Find or create the topic directory (supports nested paths like "user-auth/user-login")
+            // Find or create the topic directory (supports nested paths like "auth/login")
             let spec_dir = {
                 let upper = crate::fs::spec_dir().join(area).join(topic);
                 if upper.exists() {
@@ -838,29 +1113,59 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 }
             };
 
-            // Read templates for content
-            let base_spec_template = crate::fs::read_area_template(area, "spec.md")
-                .or_else(|| crate::fs::read_template("spec.md"))
-                .unwrap_or_else(|| {
-                    "# {topic}\n\n## Overview\n\n## Requirements\n\n## Acceptance Criteria\n"
-                        .to_string()
-                });
-            let base_task_template = crate::fs::read_area_template(area, "task.md")
-                .or_else(|| crate::fs::read_template("task.md"))
-                .unwrap_or_else(|| {
-                    "# Tasks - {topic}\n\n## Tasks\n- [ ] Task 1\n\n## Notes\n".to_string()
-                });
+            // Strip any existing frontmatter from provided content (for spec)
+            let cleaned_content = if provided_content.trim_start().starts_with("---") {
+                if let Some(end) = provided_content.find("\n---") {
+                    &provided_content[end + 5..]
+                } else {
+                    provided_content
+                }
+            } else {
+                provided_content
+            };
 
-            // Replace {topic} placeholder
-            let spec_template = base_spec_template.replace("{topic}", topic);
-            let task_template = base_task_template.replace("{topic}", topic);
+            // Strip any existing frontmatter from task_content
+            let cleaned_task_content = if provided_task_content.trim_start().starts_with("---") {
+                if let Some(end) = provided_task_content.find("\n---") {
+                    &provided_task_content[end + 5..]
+                } else {
+                    provided_task_content
+                }
+            } else {
+                provided_task_content
+            };
+
+            // Prepend frontmatter with metadata
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let author = crate::commands::topic::get_agent_id();
+            let short = args
+                .get("short")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! spec_add requires 'short' parameter!\n\nExample: spec_add {{ topic: \"myproject/auth\", area: \"Staging\", short: \"User authentication\", spec_content: \"...\", task_content: \"...\" }}"))?;
+
+            let spec_frontmatter = format!(
+                "---\ntitle: {}\nshort: {}\ncreated: {}\nauthor: {}\nstatus: draft\n---\n\n",
+                topic, short, now, author
+            );
+            let task_frontmatter = format!(
+                "---\nspec: {}\nshort: {}\nstatus: pending\ndate: {}\n---\n\n",
+                topic,
+                short,
+                now.split(' ').next().unwrap_or(&now)
+            );
+
+            let spec_full_content = format!("{}{}", spec_frontmatter, cleaned_content.trim_start());
+            let task_full_content =
+                format!("{}{}", task_frontmatter, cleaned_task_content.trim_start());
 
             // Write files
             let spec_path = spec_dir.join(&spec_filename);
             let task_path = spec_dir.join(&task_filename);
 
-            std::fs::write(&spec_path, spec_template)?;
-            std::fs::write(&task_path, task_template)?;
+            std::fs::write(&spec_path, spec_full_content)?;
+            std::fs::write(&task_path, task_full_content)?;
 
             Ok(json!({
                 "success": true,
@@ -869,6 +1174,134 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 "area": area,
                 "spec_file": spec_filename,
                 "task_file": task_filename
+            }))
+        }
+        // === Queue List ===
+        "queue_list" => {
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+            let queue_file = crate::agent::mode::get_readiness_queue_file();
+            let queue_path = crate::fs::spec_dir().join(area).join(&queue_file);
+            let content = if queue_path.exists() {
+                std::fs::read_to_string(&queue_path)?
+            } else {
+                "# Task Queue\n\nOrdered list of topics to work on:\n".to_string()
+            };
+            Ok(
+                json!({ "success": true, "area": area, "content": content, "queue_file": queue_file }),
+            )
+        }
+        // === Queue Add ===
+        "queue_add" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let position = args.get("position").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+
+            let queue_file = crate::agent::mode::get_readiness_queue_file();
+            let queue_path = crate::fs::spec_dir().join(area).join(&queue_file);
+            let mut content = if queue_path.exists() {
+                std::fs::read_to_string(&queue_path)?
+            } else {
+                "# Task Queue\n\nOrdered list of topics to work on:\n".to_string()
+            };
+
+            // Parse existing items
+            let mut items: Vec<String> = content
+                .lines()
+                .filter(|l| l.trim().starts_with("- "))
+                .map(|l| l.trim().trim_start_matches("- ").to_string())
+                .collect();
+
+            // Add topic at position
+            if position < 0 || position as usize >= items.len() {
+                items.push(topic.to_string());
+            } else {
+                items.insert(position as usize, topic.to_string());
+            }
+
+            // Rebuild content
+            let header = "# Task Queue\n\nOrdered list of topics to work on:\n";
+            content = header.to_string();
+            for item in items {
+                content.push_str(&format!("- {}\n", item));
+            }
+
+            std::fs::write(&queue_path, content)?;
+            Ok(
+                json!({ "success": true, "message": format!("Added '{}' to queue at position {}", topic, position), "topic": topic, "area": area, "queue_file": queue_file }),
+            )
+        }
+        // === Queue Remove ===
+        "queue_remove" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+
+            let queue_file = crate::agent::mode::get_readiness_queue_file();
+            let queue_path = crate::fs::spec_dir().join(area).join(&queue_file);
+            let content = if queue_path.exists() {
+                std::fs::read_to_string(&queue_path)?
+            } else {
+                return Err(anyhow::anyhow!("Queue not found"));
+            };
+
+            // Remove topic
+            let new_content: String = content
+                .lines()
+                .filter(|l| !l.trim().starts_with("- ") || !l.contains(topic))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            std::fs::write(&queue_path, new_content)?;
+            Ok(
+                json!({ "success": true, "message": format!("Removed '{}' from queue", topic), "topic": topic, "area": area }),
+            )
+        }
+        // === Queue Check ===
+        "queue_check" => {
+            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+
+            let queue_file = crate::agent::mode::get_readiness_queue_file();
+            let queue_path = crate::fs::spec_dir().join(area).join(&queue_file);
+
+            if !queue_path.exists() {
+                return Ok(json!({
+                    "success": true,
+                    "ready": false,
+                    "message": "No queue file found",
+                    "topic": topic,
+                    "area": area
+                }));
+            }
+
+            let content = std::fs::read_to_string(&queue_path)?;
+            let is_in_queue = content.lines().any(|line| {
+                let trimmed = line.trim();
+                trimmed.starts_with("- ") && trimmed.contains(topic)
+            });
+
+            Ok(json!({
+                "success": true,
+                "ready": is_in_queue,
+                "message": if is_in_queue {
+                    format!("Topic '{}' is in the queue and ready to push", topic)
+                } else {
+                    format!("Topic '{}' is NOT in the queue - add it first", topic)
+                },
+                "topic": topic,
+                "area": area,
+                "queue_file": queue_file
             }))
         }
         name => {

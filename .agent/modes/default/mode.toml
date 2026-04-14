@@ -9,6 +9,27 @@ default = ["Staging", "Working", "Testing", "Fixing", "Build"]
 protected = ["Build"]
 default_area = "Staging"
 
+[readiness]
+queue_file = "queue.md"
+required_for_push = true
+areas = ["Staging", "Fixing"]
+
+[readiness.area_filters.staging]
+push_files = ["topic.md", "spec.md", "task.md", "queue.md"]
+
+[readiness.area_filters.working]
+push_files = ["topic.md", "spec.md", "task.md", "queue.md"]
+
+[readiness.area_filters.testing]
+push_files = ["topic.md", "spec.md", "task.md"]
+delete_files = ["queue.md"]
+
+[readiness.area_filters.fixing]
+push_files = ["topic.md", "spec.md", "task.md"]
+
+[readiness.area_filters.build]
+push_files = ["topic.md", "spec.md", "task.md"]
+
 [capabilities]
 spec_writing = true
 building = true

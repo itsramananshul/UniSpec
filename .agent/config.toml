@@ -1,5 +1,5 @@
-current_mode = "simple"
-area = "Working"
+current_mode = "default"
+area = "Staging"
 protected_areas = []
 paddy_enabled = false
 

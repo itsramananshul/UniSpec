@@ -5,6 +5,34 @@ UniSpec is a spec-driven development workflow system. It uses a 5-area pipeline 
 
 ---
 
+## KEY RULE: Topics First, Always!
+
+**Before doing ANYTHING in UniSpec, you MUST start with topics!**
+
+1. **ALWAYS start by listing topics** - Never assume you know the project structure
+   ```
+   topics_list {area: "Staging"}
+   topics_list {area: "Working"}
+   ```
+
+2. **ALWAYS read the topic first** - Before writing specs or code, secure the scope
+   ```
+   topic_read {topic: "<topic-name>", area: "Staging"}
+   ```
+
+3. **Topics define scope** - Each topic bounds:
+   - What specs can be created under it
+   - What code should be built in it
+   - The overall project structure
+
+**This is MANDATORY for every workflow:**
+
+- **SPEC workflow:** Research topics → Understand scope → Then create specs
+- **BUILD workflow:** Research topics → Understand scope → Then build code
+- **Any other workflow:** Topics first!
+
+---
+
 ## The 5 Areas (Pipeline Stages)
 
 Work flows through these areas in order:
@@ -91,10 +119,10 @@ Use `spec_add` to create both spec.md and task.md from templates in one step:
 spec_add {topic: "feature-name", area: "Staging"}
 ```
 
-### Step 6: Add to Queue and Move Forward
+### Step 6: Add to Queue
 ```
 queue_add {topic: "feature-name", position: 0}
-topics_push {topic: "feature-name", area: "Working"}
+# EDIT ONLY IN STAGING - Do NOT push to Working
 ```
 
 ---
@@ -136,21 +164,20 @@ The **queue** (`queue.md`) is an ordered list of topics to work on:
 - `topics_progress [area]` - Show completion progress across topics
 
 ### Spec & Tasks
-- `spec_add {topic, area}` - Create spec.md and task.md from templates
-- `spec_read {topic, area}` - Read spec.md content
-- `spec_write {topic, area, content}` - Write spec.md content
-- `task_read {topic, area}` - Read task.md content
-- `task_write {topic, area, content}` - Write task.md content
-- `tasks_list {topic, area}` - List all tasks with status (pending/complete)
-- `tasks_complete {topic, task_index, note, area}` - Mark task complete (index is 0-based)
-- `tasks_incomplete {topic, task_index, note, area}` - Mark task incomplete
+- `spec_add {topic, area}` - Create *_spec.md and *_task.md from templates (area: Staging)
+- `spec_read {topic, area}` - Read spec content (area: Staging)
+- `spec_write {topic, area, content}` - Write spec content
+- `task_read {topic, area}` - Read task content (area: Staging)
+- `task_write {topic, area, content}` - Write full task content
+- `task_status {topic, area, status}` - Update task status: pending, working, or complete
+- `tasks_list {topic, area}` - List all tasks with status
 
 ### Notes
 - `notes_read {topic, area}` - Read notes section from task.md
 - `notes_add {topic, note, area}` - Add a note to notes section
 
 ### Queue (Ordered Work List)
-- `queue_list [area]` - List ordered queue of topics
+- `queue_list [area]` - List ordered queue of topics (area: Staging)
 - `queue_add {topic, position, area}` - Add to queue (0=first, -1=last)
 - `queue_remove {topic, area}` - Remove from queue
 - `queue_reorder {topic, new_position, area}` - Reorder queue
@@ -185,25 +212,23 @@ tasks_list {topic: "feature-name", area: "Working"}
 
 ### 2. Implement
 ```
-# Do the work, mark tasks complete as you finish
-tasks_complete {topic: "feature-name", task_index: 0}
-tasks_complete {topic: "feature-name", task_index: 1}
+# Mark task as working
+task_status {topic: "feature-name", area: "Staging", status: "working"}
 
-# If you need to modify the spec or task file:
-spec_write {topic: "feature-name", area: "Working", content: "..."}
-task_write {topic: "feature-name", area: "Working", content: "..."}
+# Do the work, mark tasks complete when done
+task_status {topic: "feature-name", area: "Staging", status: "complete"}
+
+# If you need to modify the spec:
+spec_write {topic: "feature-name", area: "Staging", content: "..."}
 
 # Add implementation notes
 notes_add {topic: "feature-name", note: "Using JWT tokens for auth"}
-
-# Link new files to the spec
-index_add {topic: "feature-name", path: "src/auth.rs", link_type: "implementation", tags: "auth"}
 ```
 
-### 3. Move Work Forward
+### 3. Complete
 ```
-# When tasks are complete, push to next area
-topics_push {topic: "feature-name", area: "Testing"}
+# When done, mark as complete
+task_status {topic: "feature-name", area: "Staging", status: "complete"}
 ```
 
 ### 4. Verify

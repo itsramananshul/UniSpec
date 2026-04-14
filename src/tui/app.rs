@@ -53,6 +53,8 @@ pub struct App {
     pub pending_args: Vec<String>,
     pub pending_impact: Option<String>,
     pub pending_change_type: Option<String>,
+    pub pending_short: Option<String>,
+    pub pending_topic_name: Option<String>,
     pub message_timer: Option<Instant>,
     pub find_paths: Vec<String>,
     pub saved_topics: Vec<TopicNode>,
@@ -63,6 +65,9 @@ pub struct App {
     pub animation_step: usize,
     pub expression_timer: Option<Instant>,
     pub platypus_enabled: bool,
+    pub preview_content: Option<String>,
+    pub preview_topic: Option<String>, // Track what's being previewed
+    pub selected_short: Option<String>, // Short description of currently selected item
 }
 
 impl App {
@@ -82,6 +87,8 @@ impl App {
             pending_args: vec![],
             pending_impact: None,
             pending_change_type: None,
+            pending_short: None,
+            pending_topic_name: None,
             message_timer: None,
             find_paths: vec![],
             saved_topics: vec![],
@@ -92,6 +99,9 @@ impl App {
             animation_step: 0,
             expression_timer: None,
             platypus_enabled: true,
+            preview_content: None,
+            preview_topic: None,
+            selected_short: None,
         })
     }
 
@@ -107,6 +117,85 @@ impl App {
         self.expression_timer = Some(Instant::now() + Duration::from_secs(duration_secs));
     }
 
+    fn handle_enter_key(&mut self) {
+        // Enter opens the file/directory in the default app
+        match &self.state.nav_state {
+            NavState::FindResults { .. } => {
+                if let Some(path) = self
+                    .find_paths
+                    .get(self.list_state.selected().unwrap_or(0))
+                    .cloned()
+                {
+                    self.open_file(&path);
+                }
+            }
+            NavState::AreaSelection => {
+                let areas = self.state.load_areas().unwrap_or_default();
+                let selected = self.list_state.selected().unwrap_or(0);
+                if let Some(area_name) = areas.get(selected) {
+                    let area_path = crate::fs::spec_dir().join(area_name);
+                    self.open_file(&area_path.to_string_lossy());
+                }
+            }
+            _ => {
+                if let Some(topic) = self
+                    .state
+                    .topics
+                    .get(self.list_state.selected().unwrap_or(0))
+                    .cloned()
+                {
+                    self.open_file(&topic.path.to_string_lossy());
+                }
+            }
+        }
+    }
+
+    fn get_chunk_indices(&self) -> (usize, usize, usize) {
+        // Returns (list_idx, short_idx, help_idx) based on current state
+        let has_platypus = self.platypus_enabled;
+        let has_preview = self.preview_content.is_some();
+
+        if has_platypus && has_preview {
+            (3, 4, 5) // status(0), platypus(1), preview(2), list(3), short(4), help(5)
+        } else if has_platypus {
+            (2, 3, 4) // status(0), platypus(1), list(2), short(3), help(4)
+        } else if has_preview {
+            (2, 3, 4) // status(0), preview(1), list(2), short(3), help(4)
+        } else {
+            (1, 2, 3) // status(0), list(1), short(2), help(3)
+        }
+    }
+
+    fn update_selected_short(&mut self) {
+        self.selected_short = None;
+
+        match &self.state.nav_state {
+            NavState::AreaSelection => {
+                let areas = self.state.load_areas().unwrap_or_default();
+                if let Some(selected) = self.list_state.selected() {
+                    if let Some(area_name) = areas.get(selected) {
+                        // Try to read area.md and get short from frontmatter
+                        let area_path = crate::fs::spec_dir().join(area_name).join("area.md");
+                        if let Ok(content) = std::fs::read_to_string(&area_path) {
+                            self.selected_short =
+                                TopicNode::extract_short_from_file(&area_path).into();
+                        }
+                    }
+                }
+            }
+            NavState::TopicList(_) | NavState::NestedSpecs(_) => {
+                if let Some(selected) = self.list_state.selected() {
+                    if let Some(topic) = self.state.topics.get(selected) {
+                        self.selected_short = topic.short.clone().into();
+                    }
+                }
+            }
+            NavState::FindResults { .. } => {
+                // For find results, could show the file path
+            }
+        }
+    }
+
     fn get_area_type(&self, area: &str) -> crate::agent::mode::DisplayType {
         let area_lower = area.to_lowercase();
 
@@ -119,6 +208,9 @@ impl App {
         }
         if area_lower.contains("working") {
             return crate::agent::mode::DisplayType::Working;
+        }
+        if area_lower.contains("specing") {
+            return crate::agent::mode::DisplayType::Specing;
         }
 
         // Then check mode config
@@ -137,6 +229,11 @@ impl App {
                 if let Some(ref build_config) = config.area_types.build {
                     if area_lower == "build" || area_lower.contains("build") {
                         return crate::agent::mode::DisplayType::Build;
+                    }
+                }
+                if let Some(ref specing_config) = config.area_types.specing {
+                    if area_lower == "specing" || area_lower.contains("specing") {
+                        return crate::agent::mode::DisplayType::Specing;
                     }
                 }
             }
@@ -193,38 +290,80 @@ impl App {
             }
 
             terminal.draw(|f: &mut ratatui::Frame| {
-                let chunks = if self.platypus_enabled {
-                    Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([
-                            Constraint::Length(3),
-                            Constraint::Length(7),
-                            Constraint::Min(1),
-                            Constraint::Length(3),
-                        ])
-                        .split(f.size())
+                // Determine layout based on state - compute index for preview chunk
+                let preview_chunk_idx = if self.preview_content.is_some() {
+                    if self.platypus_enabled { 3 } else { 2 }
                 } else {
-                    Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([
-                            Constraint::Length(3),
-                            Constraint::Min(1),
-                            Constraint::Length(3),
-                        ])
-                        .split(f.size())
+                    usize::MAX // No preview
+                };
+                
+                // Add short description box (between list and help)
+                let chunks = if self.platypus_enabled {
+                    if self.preview_content.is_some() {
+                        // Platypus + Preview + Short: status(0), platypus(1), preview(2), list(3), short(4), help(5)
+                        Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([
+                                Constraint::Length(3),
+                                Constraint::Length(7),
+                                Constraint::Length(10),
+                                Constraint::Min(1),
+                                Constraint::Length(3),
+                                Constraint::Length(3),
+                            ])
+                            .split(f.size())
+                    } else {
+                        // Platypus + Short: status(0), platypus(1), list(2), short(3), help(4)
+                        Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([
+                                Constraint::Length(3),
+                                Constraint::Length(7),
+                                Constraint::Min(1),
+                                Constraint::Length(3),
+                                Constraint::Length(3),
+                            ])
+                            .split(f.size())
+                    }
+                } else {
+                    if self.preview_content.is_some() {
+                        // Preview + Short: status(0), preview(1), list(2), short(3), help(4)
+                        Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([
+                                Constraint::Length(3),
+                                Constraint::Length(10),
+                                Constraint::Min(1),
+                                Constraint::Length(3),
+                                Constraint::Length(3),
+                            ])
+                            .split(f.size())
+                    } else {
+                        // Short only: status(0), list(1), short(2), help(3)
+                        Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([
+                                Constraint::Length(3),
+                                Constraint::Min(1),
+                                Constraint::Length(3),
+                                Constraint::Length(3),
+                            ])
+                            .split(f.size())
+                    }
                 };
 
                 let area_name = self.current_area.as_ref().map(|a| a.clone()).unwrap_or_else(|| "None".to_string());
                 let version = crate::version::VERSION;
                 let mode_name = crate::agent::current_mode().unwrap_or_else(|_| "unknown".to_string());
                 let platypus_status = if self.platypus_enabled { "" } else { " | Paddy: OFF" };
+                let preview_status = if self.preview_content.is_some() { " | PREVIEW (press Enter to close)" } else { "" };
 
                 let status_text = match &self.state.nav_state {
                     NavState::FindResults { paths, topic } => {
-                        format!("UniSpec v{} | Mode: {} | Topic: {} | Links: {}{}", version, mode_name, topic, paths.len(), platypus_status)
+                        format!("UniSpec v{} | Mode: {} | Topic: {} | Links: {}{}{}", version, mode_name, topic, paths.len(), platypus_status, preview_status)
                     }
                     _ => {
-                        format!("UniSpec v{} | Mode: {} | Area: {} | Topics: {}{}", version, mode_name, area_name, self.state.topics.len(), platypus_status)
+                        format!("UniSpec v{} | Mode: {} | Area: {} | Topics: {}{}{}", version, mode_name, area_name, self.state.topics.len(), platypus_status, preview_status)
                     }
                 };
                 let status_widget = Paragraph::new(status_text).block(Block::default().borders(Borders::ALL));
@@ -265,7 +404,16 @@ impl App {
                             ListItem::new(format!(">> {} ({}){}", a.clone(), count_str, work_indicator)).style(style)
                         }).collect();
                         let list = List::new(items).block(Block::default().title("Select Area").borders(Borders::ALL));
-                        f.render_stateful_widget(list, if self.platypus_enabled { chunks[2] } else { chunks[1] }, &mut self.list_state);
+                        // New layout: status(0), platypus(1), preview(2), list(3), short(4), help(5) or similar
+                        let (list_idx, short_idx, help_idx) = self.get_chunk_indices();
+                        f.render_stateful_widget(list, chunks[list_idx], &mut self.list_state);
+                        
+                        // Render short description box
+                        if let Some(ref short) = self.selected_short {
+                            let short_widget = Paragraph::new(short.clone())
+                                .block(Block::default().title("Short Description").borders(Borders::ALL));
+                            f.render_widget(short_widget, chunks[short_idx]);
+                        }
                     }
                     NavState::FindResults { topic, paths } => {
                         let items: Vec<ListItem> = if paths.is_empty() {
@@ -279,7 +427,15 @@ impl App {
                         let title = format!("Files linked to: {}", topic);
                         let list = List::new(items).block(Block::default().title(title.as_str()).borders(Borders::ALL))
                             .highlight_symbol(">> ");
-                        f.render_stateful_widget(list, if self.platypus_enabled { chunks[2] } else { chunks[1] }, &mut self.list_state);
+                        let (list_idx, short_idx, help_idx) = self.get_chunk_indices();
+                        f.render_stateful_widget(list, chunks[list_idx], &mut self.list_state);
+                        
+                        // Render short description box
+                        if let Some(ref short) = self.selected_short {
+                            let short_widget = Paragraph::new(short.clone())
+                                .block(Block::default().title("Short Description").borders(Borders::ALL));
+                            f.render_widget(short_widget, chunks[short_idx]);
+                        }
                     }
                     _ => {
                         let area_type = self.state.topics.first().map(|t| t.area_type.clone()).unwrap_or(crate::agent::mode::DisplayType::Standard);
@@ -302,14 +458,16 @@ impl App {
                                         .cloned()
                                         .unwrap_or_else(|| change_type.to_string());
 
+                                    let short_str = if !t.short.is_empty() { format!(" │ {}", t.short) } else { String::new() };
+                                    
                                     if impact.is_empty() && change_type.is_empty() {
-                                        t.topic.clone()
+                                        format!("{}{}", t.topic, short_str)
                                     } else if impact.is_empty() {
-                                        format!("{} │ {}", t.topic, type_badge)
+                                        format!("{} │ {}{}", t.topic, type_badge, short_str)
                                     } else if change_type.is_empty() {
-                                        format!("{} │ {}", t.topic, impact_badge)
+                                        format!("{} │ {}{}", t.topic, impact_badge, short_str)
                                     } else {
-                                        format!("{} │ {} │ {}", t.topic, type_badge, impact_badge)
+                                        format!("{} │ {} │ {}{}", t.topic, type_badge, impact_badge, short_str)
                                     }
                                 }
                                 crate::agent::mode::DisplayType::Build => {
@@ -331,7 +489,17 @@ impl App {
                                     } else {
                                         String::new()
                                     };
-                                    format!("✅ {} │ completed: {}{}", t.topic, completed, checkout_info)
+                                    let short_str = if !t.short.is_empty() { format!(" │ {}", t.short) } else { String::new() };
+                                    format!("✅ {} │ completed: {}{}{}", t.topic, completed, checkout_info, short_str)
+                                }
+                                crate::agent::mode::DisplayType::Specing => {
+                                    let ready_status = if t.metadata.status.as_deref() == Some("ready") || t.tasks_completed > 0 {
+                                        " (ready)".to_string()
+                                    } else {
+                                        "".to_string()
+                                    };
+                                    let short_str = if !t.short.is_empty() { format!(" │ {}", t.short) } else { String::new() };
+                                    format!("📝 {}{}{}", t.topic, ready_status, short_str)
                                 }
                                 crate::agent::mode::DisplayType::Working | crate::agent::mode::DisplayType::Standard => {
                                     let progress = if t.tasks_total > 0 { (t.tasks_completed * 100 / t.tasks_total) as u16 } else { 0 };
@@ -375,7 +543,24 @@ impl App {
                         }).collect();
                         let list = List::new(items).block(Block::default().title("Specs").borders(Borders::ALL))
                             .highlight_symbol(">> ");
-                        f.render_stateful_widget(list, if self.platypus_enabled { chunks[2] } else { chunks[1] }, &mut self.list_state);
+                        let (list_idx, short_idx, help_idx) = self.get_chunk_indices();
+                        f.render_stateful_widget(list, chunks[list_idx], &mut self.list_state);
+                        
+                        // Render short description box
+                        if let Some(ref short) = self.selected_short {
+                            let short_widget = Paragraph::new(short.clone())
+                                .block(Block::default().title("Short Description").borders(Borders::ALL));
+                            f.render_widget(short_widget, chunks[short_idx]);
+                        }
+                    }
+                }
+
+                // Render preview if active
+                if let Some(ref content) = self.preview_content {
+                    if preview_chunk_idx < chunks.len() {
+                        let preview_widget = Paragraph::new(content.clone())
+                            .block(Block::default().title("Preview").borders(Borders::ALL));
+                        f.render_widget(preview_widget, chunks[preview_chunk_idx]);
                     }
                 }
 
@@ -390,7 +575,8 @@ impl App {
                     self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | q: Quit", move_cmd))
                 };
                 let help_widget = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
-                f.render_widget(help_widget, if self.platypus_enabled { chunks[3] } else { chunks[2] });
+                let (_, _, help_idx) = self.get_chunk_indices();
+                f.render_widget(help_widget, chunks[help_idx]);
             })?;
 
             if event::poll(Duration::from_millis(100))? {
@@ -436,65 +622,37 @@ impl App {
                             self.pending_args.clear();
                         }
                     } else if self.input_prompt == "Name for new topic?" {
-                        let topic_name = input.clone();
-                        let area = self.current_area.as_deref().unwrap_or("Working");
-                        let current_path = match &self.state.nav_state {
-                            NavState::NestedSpecs(ref path) => {
-                                let spec_dir = crate::fs::spec_dir().join(area);
-                                let rel = path.strip_prefix(&spec_dir).unwrap_or(path);
-                                if rel.as_os_str().is_empty() || rel == std::path::Path::new("") {
-                                    topic_name.clone()
-                                } else {
-                                    format!("{}/{}", rel.to_string_lossy(), topic_name)
-                                }
-                            }
-                            _ => topic_name.clone(),
-                        };
-                        match crate::commands::topic::run_new(&current_path, area) {
-                            Ok(msg) => {
-                                self.message = Some(msg);
-                                self.trigger_expression(PlatypusState::Happy, 2);
-                            }
-                            Err(e) => self.message = Some(format!("Error: {}", e)),
-                        }
-                        self.input_mode = false;
-                        self.pending_args.clear();
-                    } else if self.input_prompt == "Name for new spec?" {
-                        if let Some(area) = &self.current_area {
-                            let spec_name = input.clone();
-                            let current_path = match &self.state.nav_state {
-                                NavState::NestedSpecs(ref path) => {
-                                    let spec_dir = crate::fs::spec_dir().join(area);
-                                    path.strip_prefix(&spec_dir)
-                                        .unwrap_or(path)
-                                        .to_string_lossy()
-                                        .to_string()
-                                }
-                                _ => "".to_string(),
-                            };
-
-                            if current_path.is_empty() {
-                                self.message =
-                                    Some("❌ Specs must be created inside a topic.".to_string());
-                            } else {
-                                match crate::commands::topic::run_new_spec(
-                                    &spec_name,
-                                    &current_path,
-                                    area,
-                                ) {
-                                    Ok(msg) => {
-                                        self.message = Some(msg);
-                                        self.trigger_expression(PlatypusState::Happy, 2);
-                                    }
-                                    Err(e) => self.message = Some(format!("Error: {}", e)),
-                                }
-                            }
-                            self.state.update_status();
-                            self.last_refresh = Instant::now();
+                        let topic_name = self.pending_args[0].clone();
+                        if topic_name.is_empty() {
+                            self.message = Some("❌ Topic name cannot be empty.".to_string());
                             self.input_mode = false;
                             self.pending_args.clear();
+                        } else if topic_name.contains('/') {
+                            self.message = Some(
+                                "❌ Topic name cannot contain '/'. Use '-' instead.".to_string(),
+                            );
+                            self.input_mode = false;
+                            self.pending_args.clear();
+                        } else {
+                            self.pending_topic_name = Some(topic_name);
+                            self.input_prompt = "Short one-line description?".to_string();
                         }
-                        self.message_timer = Some(Instant::now());
+                        self.last_refresh = Instant::now();
+                    } else if self.input_prompt == "Short one-line description?" {
+                        let short = self.pending_args.last().cloned().unwrap_or_default();
+                        if short.len() < 5 {
+                            self.message = Some(
+                                "❌ Short description must be at least 5 characters.".to_string(),
+                            );
+                            self.message_timer = Some(Instant::now());
+                            self.input_mode = false;
+                            self.pending_args.clear();
+                            self.pending_topic_name = None;
+                            self.pending_short = None;
+                        } else {
+                            self.pending_short = Some(short);
+                            self.input_prompt = "Impact (critical/high/medium/low)?".to_string();
+                        }
                     } else if self.input_prompt == "Impact (critical/high/medium/low)?" {
                         let impact = self.pending_args.last().cloned().unwrap_or_default();
                         if ["critical", "high", "medium", "low"]
@@ -546,31 +704,14 @@ impl App {
                                     _ => topic_name.clone(),
                                 };
 
+                                let short = self.pending_short.clone();
                                 let impact = self.pending_impact.clone();
-                                let ct = self.pending_change_type.clone();
-
-                                // For specs, we want to create them inside the current topic directory
-                                let spec_name = self.pending_args[0].clone();
-                                let topic_path = match &self.state.nav_state {
-                                    NavState::TopicList(_) => {
-                                        if let Some(topic) = self
-                                            .state
-                                            .topics
-                                            .get(self.list_state.selected().unwrap_or(0))
-                                        {
-                                            format!("{}/{}", topic.relative_path(), spec_name)
-                                        } else {
-                                            spec_name.clone()
-                                        }
-                                    }
-                                    _ => spec_name.clone(),
-                                };
 
                                 match crate::commands::topic::run_new_with_metadata(
-                                    &topic_path,
+                                    &full_path,
                                     area,
-                                    impact.as_deref(),
-                                    ct.as_deref(),
+                                    short.as_deref(),
+                                    None, // No content from TUI - uses template
                                 ) {
                                     Ok(msg) => {
                                         self.message = Some(msg);
@@ -591,7 +732,7 @@ impl App {
                         self.input_mode = false;
                         self.pending_args.clear();
                         self.pending_impact = None;
-                        self.pending_change_type = None;
+                        self.pending_short = None;
                     } else if self.input_prompt == "Name for new area?" {
                         match crate::commands::area::run_add(&self.pending_args[0]) {
                             Ok(_) => {
@@ -832,13 +973,18 @@ impl App {
                 let i = self.list_state.selected().unwrap_or(0);
                 if i < len.saturating_sub(1) {
                     self.list_state.select(Some(i + 1));
+                    self.update_selected_short();
                 }
             }
             KeyCode::Up => {
                 let i = self.list_state.selected().unwrap_or(0);
                 if i > 0 {
                     self.list_state.select(Some(i - 1));
+                    self.update_selected_short();
                 }
+            }
+            KeyCode::Enter => {
+                self.handle_enter_key();
             }
             KeyCode::Left => {
                 if let NavState::FindResults { .. } = &self.state.nav_state {
@@ -849,10 +995,12 @@ impl App {
                     self.state.topics = self.saved_topics.clone();
                     self.find_paths.clear();
                     self.list_state.select(Some(0));
+                    self.update_selected_short();
                 } else if let Some((prev_state, prev_topics)) = self.history.pop() {
                     self.state.nav_state = prev_state;
                     self.state.topics = prev_topics;
                     self.list_state.select(Some(0));
+                    self.update_selected_short();
                 } else if let NavState::TopicList(_) | NavState::NestedSpecs(_) =
                     self.state.nav_state
                 {
@@ -860,6 +1008,7 @@ impl App {
                     self.state.topics = vec![];
                     self.current_area = None;
                     self.list_state.select(Some(0));
+                    self.update_selected_short();
                 }
             }
             KeyCode::Right => match &self.state.nav_state {
@@ -870,6 +1019,7 @@ impl App {
                         let _ = self.state.load_topics_for_area(area_name);
                         self.current_area = Some(area_name.clone());
                         self.list_state.select(Some(0));
+                        self.update_selected_short();
                     }
                 }
                 NavState::TopicList(_) | NavState::NestedSpecs(_) => {
@@ -885,6 +1035,7 @@ impl App {
                             self.state.nav_state = NavState::NestedSpecs(topic.path.clone());
                             self.state.topics = topic.children;
                             self.list_state.select(Some(0));
+                            self.update_selected_short();
                         }
                     }
                 }

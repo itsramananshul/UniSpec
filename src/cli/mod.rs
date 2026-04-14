@@ -212,10 +212,10 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum AutoCommands {
-    /// Build a topic
+    /// Build a topic (auto-discovers root topic with queue.md if not provided)
     Build {
-        /// Topic to build
-        topic: String,
+        /// Topic to build (optional - will auto-discover root topic with queue.md)
+        topic: Option<String>,
         /// Area to build in
         #[arg(short, long)]
         area: Option<String>,
@@ -412,6 +412,12 @@ pub enum TopicCommands {
         /// Area to create the topic in (default: Working)
         #[arg(short, long, default_value = "Working")]
         area: String,
+        /// Short one-line description (required)
+        #[arg(short, long)]
+        short: String,
+        /// Topic content/markdown (required, use - to read from stdin)
+        #[arg(short, long, default_value = "")]
+        content: String,
     },
     /// List topics in an area
     List {

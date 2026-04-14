@@ -18,6 +18,7 @@ pub struct TopicNode {
     pub children: Vec<TopicNode>,
     pub is_checked_out: bool,
     pub checked_out_by: Option<String>,
+    pub short: String,
 }
 
 impl TopicNode {
@@ -28,6 +29,22 @@ impl TopicNode {
         } else {
             self.topic.clone()
         }
+    }
+
+    pub fn extract_short_from_file(path: &Path) -> String {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Some(short_start) = content.find("short:") {
+                let after_short = &content[short_start..];
+                if let Some(newline) = after_short.find('\n') {
+                    let short_line = after_short[7..newline].trim().to_string();
+                    if !short_line.is_empty() && short_line != "<Add a one-liner description here>"
+                    {
+                        return short_line;
+                    }
+                }
+            }
+        }
+        String::new()
     }
 }
 
@@ -72,23 +89,17 @@ impl AppState {
         }
 
         if !ordered_areas.is_empty() {
-            let mut areas: Vec<String> = ordered_areas
+            let areas: Vec<String> = ordered_areas
                 .into_iter()
                 .filter(|a| existing_areas.contains(a))
                 .collect();
-            let ordered_count = areas.len();
-            for area in &existing_areas {
-                if !areas.contains(area) {
-                    areas.push(area.clone());
-                }
+            if areas.is_empty() {
+                let mut areas: Vec<String> = existing_areas.into_iter().collect();
+                areas.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+                Ok(areas)
+            } else {
+                Ok(areas)
             }
-            if areas.len() > ordered_count {
-                let extra = areas.split_off(ordered_count);
-                let mut sorted_extra = extra;
-                sorted_extra.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
-                areas.extend(sorted_extra);
-            }
-            Ok(areas)
         } else {
             let mut areas: Vec<String> = existing_areas.into_iter().collect();
             areas.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
@@ -162,12 +173,15 @@ impl AppState {
             for entry in std::fs::read_dir(&area_spec_dir)? {
                 let entry = entry?;
                 if entry.path().is_dir() {
-                    topics.push(self.load_topic_recursive(
-                        &entry.path(),
-                        area.to_string(),
-                        area_type.clone(),
-                        &spec_file,
-                    )?);
+                    // Only include directories that have topic.md files
+                    if entry.path().join("topic.md").exists() {
+                        topics.push(self.load_topic_recursive(
+                            &entry.path(),
+                            area.to_string(),
+                            area_type.clone(),
+                            &spec_file,
+                        )?);
+                    }
                 }
             }
         }
@@ -198,7 +212,28 @@ impl AppState {
 
         self.topics = topics;
         self.nav_state = NavState::TopicList(area.to_string());
+
+        // Populate short descriptions
+        self.populate_short_descriptions();
+
         Ok(())
+    }
+
+    fn populate_short_descriptions(&mut self) {
+        for topic in &mut self.topics {
+            topic.short = TopicNode::extract_short_from_file(&topic.path.join("topic.md"));
+            for child in &mut topic.children {
+                // For specs, child.path is already the spec file path
+                // For nested topics, child.path is the directory
+                if child.path.is_file() {
+                    // It's a spec file - use path directly
+                    child.short = TopicNode::extract_short_from_file(&child.path);
+                } else {
+                    // It's a directory - try topic.md
+                    child.short = TopicNode::extract_short_from_file(&child.path.join("topic.md"));
+                }
+            }
+        }
     }
 
     fn get_area_type(&self, area: &str) -> DisplayType {
@@ -213,6 +248,9 @@ impl AppState {
         }
         if area_lower.contains("working") {
             return DisplayType::Working;
+        }
+        if area_lower.contains("specing") {
+            return DisplayType::Specing;
         }
 
         // Then check mode config
@@ -231,6 +269,11 @@ impl AppState {
                 if let Some(ref build_config) = config.area_types.build {
                     if area_lower == "build" || area_lower.contains("build") {
                         return DisplayType::Build;
+                    }
+                }
+                if let Some(ref specing_config) = config.area_types.specing {
+                    if area_lower == "specing" || area_lower.contains("specing") {
+                        return DisplayType::Specing;
                     }
                 }
             }
@@ -316,6 +359,9 @@ impl AppState {
                             (0, 0, 0)
                         };
 
+                        // Extract short from spec file
+                        let spec_short = TopicNode::extract_short_from_file(&path);
+
                         children.push(TopicNode {
                             topic: spec_name.to_string(),
                             path: path.clone(),
@@ -329,6 +375,7 @@ impl AppState {
                             children: vec![],
                             is_checked_out: false,
                             checked_out_by: None,
+                            short: spec_short,
                         });
                     }
                 }
@@ -339,7 +386,7 @@ impl AppState {
 
         let (total, completed, in_progress) = match area_type {
             DisplayType::Roadmap | DisplayType::Build => (0, 0, 0),
-            DisplayType::Working | DisplayType::Standard => {
+            DisplayType::Working | DisplayType::Standard | DisplayType::Specing => {
                 self.calculate_total_tasks(path, &children, &area)
             }
         };
@@ -354,7 +401,6 @@ impl AppState {
             "waiting".to_string()
         };
 
-        let agent_id = crate::commands::topic::get_agent_id();
         let is_checked_out = metadata
             .checked_out
             .as_ref()
@@ -375,6 +421,7 @@ impl AppState {
             children,
             is_checked_out,
             checked_out_by,
+            short: String::new(),
         })
     }
 
@@ -491,7 +538,7 @@ impl AppState {
         if path.exists() {
             for entry in std::fs::read_dir(path)? {
                 let entry = entry?;
-                if entry.path().is_dir() {
+                if entry.path().is_dir() && entry.path().join("topic.md").exists() {
                     topics.push(self.load_topic_recursive(
                         &entry.path(),
                         area.clone(),

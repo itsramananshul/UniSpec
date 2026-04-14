@@ -19,8 +19,62 @@ pub fn get_agent_id() -> String {
         })
 }
 
-pub fn run_new(topic: &str, area_str: &str) -> Result<String> {
-    run_new_with_metadata(topic, area_str, None, None)
+pub fn run_new(
+    topic: &str,
+    area_str: &str,
+    short: Option<&str>,
+    content: Option<&str>,
+) -> Result<String> {
+    let topic_path = crate::fs::spec_dir().join(area_str).join(topic);
+    let topic_name = topic_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| topic.to_string());
+
+    if topic_path.exists() {
+        return Err(anyhow::anyhow!(
+            "❌ Topic '{}' already exists in {}.",
+            topic_name,
+            area_str
+        ));
+    }
+
+    // Require short description
+    let short = short.ok_or_else(|| {
+        anyhow::anyhow!("❌ 'short' parameter is required!\n\nUsage: unispec topic add <topic> --short \"One line description\" [--content \"Markdown content\"]")
+    })?;
+
+    // Require content (use provided or prompt user)
+    let content = content.ok_or_else(|| {
+        anyhow::anyhow!("❌ 'content' parameter is required!\n\nUsage: unispec topic add <topic> --short \"One line description\" --content \"# Topic Name\\n\\n## Overview\\n...\"")
+    })?;
+
+    if content.len() < 20 {
+        return Err(anyhow::anyhow!(
+            "❌ Content must be at least 20 characters. You provided {} characters.",
+            content.len()
+        ));
+    }
+
+    std::fs::create_dir_all(&topic_path)?;
+
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let author = get_agent_id();
+
+    // Prepend frontmatter with metadata
+    let frontmatter = format!(
+        "---\ntitle: {}\nshort: {}\ncreated: {}\nauthor: {}\n---\n\n",
+        topic_name, short, now, author
+    );
+
+    let full_content = format!("{}{}", frontmatter, content);
+
+    fs::write(topic_path.join("topic.md"), full_content)?;
+
+    Ok(format!(
+        "✅ Topic '{}' created in {}/",
+        topic_name, area_str
+    ))
 }
 
 pub fn run_new_spec(spec_name: &str, topic_path: &str, area_str: &str) -> Result<String> {
@@ -58,8 +112,8 @@ pub fn run_new_spec(spec_name: &str, topic_path: &str, area_str: &str) -> Result
 pub fn run_new_with_metadata(
     topic_path_str: &str,
     area_str: &str,
-    impact: Option<&str>,
-    change_type: Option<&str>,
+    short: Option<&str>,
+    content: Option<&str>,
 ) -> Result<String> {
     let topic_path = crate::fs::spec_dir().join(area_str).join(topic_path_str);
     let topic_name = topic_path
@@ -75,46 +129,54 @@ pub fn run_new_with_metadata(
         ));
     }
 
+    // Require short description
+    let short = short.ok_or_else(|| {
+        anyhow::anyhow!("❌ Short description is required when creating topics from TUI. Please provide a one-line description.")
+    })?;
+
+    // Use content if provided, otherwise use template
+    let topic_content = if let Some(content) = content {
+        if content.len() < 20 {
+            return Err(anyhow::anyhow!(
+                "❌ Content must be at least 20 characters."
+            ));
+        }
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let author = get_agent_id();
+        let frontmatter = format!(
+            "---\ntitle: {}\nshort: {}\ncreated: {}\nauthor: {}\n---\n\n",
+            topic_name, short, now, author
+        );
+        format!("{}{}", frontmatter, content)
+    } else {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let author = get_agent_id();
+
+        let topic_template = crate::fs::read_template("topic.md")
+            .or_else(|| crate::fs::read_area_template(area_str, "topic.md"))
+            .unwrap_or_else(|| {
+                "---\ntitle: <TopicName>\nshort: <Short>\ncreated: <DateTime>\nmodified: <DateTime>\nauthor: <Author>\n---\n# <TopicName>\n\n## Overview\n\n## Specs\n\n## Sub-topics\n".to_string()
+            });
+
+        topic_template
+            .replace("<TopicName>", &topic_name)
+            .replace("{topic}", &topic_name)
+            .replace("<Short>", short)
+            .replace("{short}", short)
+            .replace("<Date>", &today)
+            .replace("<DateTime>", &now)
+            .replace("{datetime}", &now)
+            .replace("<Author>", &author)
+            .replace("{author}", &author)
+    };
+
     std::fs::create_dir_all(&topic_path)?;
-
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-
-    let spec_content = if impact.is_some() || change_type.is_some() {
-        let impact_line = impact.map(|i| format!("impact: {}", i)).unwrap_or_default();
-        let change_type_line = change_type
-            .map(|ct| format!("change_type: {}", ct))
-            .unwrap_or_default();
-        let status_line = "status: proposed".to_string();
-
-        format!(
-            "---\ntitle: {}\n{}\n{}\n{}\ncreated: {}\n---\n\n# {}\n\n## Problem Statement\n\nWhat problem does this solve?\n\n## Requirements\n\n### Must Have\n- [ ] Requirement 1\n- [ ] Requirement 2\n\n## Acceptance Criteria\n\n- [ ] Criterion 1\n- [ ] Criterion 2\n",
-            topic_name,
-            impact_line,
-            change_type_line,
-            status_line,
-            today,
-            topic_name
-        )
-    } else {
-        let specs_template = crate::fs::read_area_template(area_str, "specs.md")
-            .unwrap_or_else(|| read_default_specs_template());
-        specs_template
-    };
-
-    let tasks_template = crate::fs::read_area_template(area_str, "tasks.md")
-        .unwrap_or_else(|| read_default_tasks_template());
-
-    fs::write(topic_path.join("topic.md"), format!("# {}\n", topic_name))?;
-
-    let type_info = if let (Some(i), Some(ct)) = (impact, change_type) {
-        format!(" ({}: {})", i, ct)
-    } else {
-        String::new()
-    };
+    fs::write(topic_path.join("topic.md"), topic_content)?;
 
     Ok(format!(
-        "✅ Topic '{}' created in {}/{}",
-        topic_name, area_str, type_info
+        "✅ Topic '{}' created in {}/",
+        topic_name, area_str
     ))
 }
 
@@ -144,7 +206,7 @@ pub fn run_list(area_str: &str, _show_status: bool) -> Result<()> {
     let mut topics = vec![];
     for entry in fs::read_dir(&area_path)? {
         let entry = entry?;
-        if entry.path().is_dir() {
+        if entry.path().is_dir() && entry.path().join("topic.md").exists() {
             let name = entry.file_name();
             let spec_path = entry.path().join(&spec_filename);
             let task_path = entry.path().join(&task_filename);
@@ -268,7 +330,48 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
         }
     }
 
+    // Check readiness - only for areas configured in mode.toml
+    // Topic must be LISTED in area's queue.md to push from these areas
+    if crate::agent::mode::area_requires_readiness(&source_area_normalized) {
+        let queue_file = crate::agent::mode::get_readiness_queue_file();
+
+        // Check: is topic listed in area's queue.md? (required for push)
+        let area_queue_path = crate::fs::spec_dir()
+            .join(&source_area_normalized)
+            .join(&queue_file);
+        let is_in_queue = if area_queue_path.exists() {
+            if let Ok(queue_content) = fs::read_to_string(&area_queue_path) {
+                queue_content.lines().any(|line| {
+                    let trimmed = line.trim();
+                    trimmed.starts_with("- ") && trimmed.contains(topic)
+                })
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if !is_in_queue {
+            return Err(anyhow::anyhow!(
+                "❌ Topic '{}' is not ready to push. It must be listed in {}/{}.\nAdd it to the area queue first.",
+                topic, source_area_normalized, queue_file
+            ));
+        }
+    }
+
     ensure_dir(&dst)?;
+
+    // If pushing to Working, ensure /src directory exists at project root
+    if target_area_normalized.to_lowercase() == "working" {
+        let project_root =
+            crate::fs::project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let src_dir = project_root.join("src");
+        if !src_dir.exists() {
+            fs::create_dir_all(&src_dir)?;
+            println!("Created /src directory at project root for code files");
+        }
+    }
 
     // Get source and target file names from mode config
     let src_spec = crate::agent::mode::get_spec_filename_for_area(&source_area_normalized);
@@ -338,6 +441,26 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
                 fs::write(&target_dest, &content)?;
             } else if path.is_file() {
                 fs::copy(&path, &target_dest)?;
+            }
+        }
+    }
+
+    // Apply file filtering based on target area config - delete files that shouldn't pass through
+    if let Some(filter) = crate::agent::mode::get_area_file_filter(&target_area_normalized) {
+        if !filter.delete_files.is_empty() {
+            for entry in fs::read_dir(&dst)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                        for pattern in &filter.delete_files {
+                            if matches_pattern(filename, pattern) {
+                                let _ = fs::remove_file(&path);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -463,6 +586,18 @@ fn add_completion_metadata(content: &str, completed_date: &str) -> String {
             today, today, completed_date, content
         )
     }
+}
+
+fn matches_pattern(filename: &str, pattern: &str) -> bool {
+    if pattern.starts_with("*.") {
+        let ext = &pattern[2..];
+        return filename.ends_with(&format!(".{}", ext));
+    }
+    if pattern.ends_with("*") {
+        let prefix = &pattern[..pattern.len() - 1];
+        return filename.starts_with(prefix);
+    }
+    filename == pattern
 }
 
 pub fn run_pull(topic: &str, source_area: &str) -> Result<String> {

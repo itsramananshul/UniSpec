@@ -136,7 +136,7 @@ List topics in this area:
 const CONFIG_TEMPLATE: &str = r#"# UniSpec Agent Configuration
 
 # Current active mode
-current_mode = "simple"
+current_mode = "default"
 
 # Default area for topic operations
 # default_area = "Working"

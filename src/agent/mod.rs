@@ -34,13 +34,13 @@ pub struct AgentConfig {
 }
 
 fn default_mode() -> String {
-    "simple".to_string()
+    "default".to_string()
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            current_mode: "simple".to_string(),
+            current_mode: "default".to_string(),
             protected_areas: vec![],
             default_area: None,
             connectors: vec![],
@@ -116,7 +116,7 @@ struct LegacyConfig {
 impl From<LegacyConfig> for AgentConfig {
     fn from(legacy: LegacyConfig) -> Self {
         Self {
-            current_mode: legacy.current_mode.unwrap_or_else(|| "simple".to_string()),
+            current_mode: legacy.current_mode.unwrap_or_else(|| "default".to_string()),
             protected_areas: legacy.protected_areas,
             default_area: legacy.area,
             connectors: vec![],

@@ -1,3 +1,7 @@
+---
+area: Staging
+short: Make changes to your specs before you write code.
+---
 # Staging
 
 ## Purpose

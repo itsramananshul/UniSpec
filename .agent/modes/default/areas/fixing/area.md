@@ -1,3 +1,8 @@
+---
+area: Fixing
+short: Fixing bugs found in the testing process.
+---
+
 # Fixing
 
 ## Purpose

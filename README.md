@@ -3,7 +3,7 @@
 
 ---
 
-## Spec-Driven Development That Doesn't Suck 🔥
+## Spec-Driven Development That Doesn't Suck.
 
 Write specs. Build code. Ship software. Structured clarity for humans and clankers alike! No more cognitive debt. All in our favorite RustLang 🦀
 

@@ -1,3 +1,8 @@
+---
+area: Testing
+short: Running build scripts & QA scripts.
+---
+
 # Testing
 
 ## Purpose

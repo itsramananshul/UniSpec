@@ -1,288 +1,198 @@
 # Skill: UniSpec BUILD Workflow
 
 ## Purpose
-This workflow is for implementing specs into code, testing, and fixing issues. Use this when converting specifications into working code.
+This workflow is for implementing specs into code. Use this when converting specifications into working code.
+
+**IMPORTANT: All work starts in Staging. A topic must be listed in area's queue.md to be pushable.**
 
 ---
 
-## When to Use This Workflow
+## KEY RULE: Topics First, Always!
 
-Use BUILD workflow when:
-- Implementing features from specs
-- Writing code that matches specifications
-- Running tests and verifying functionality
-- Debugging and fixing issues
-- Running build/verify commands
+**Before doing ANYTHING, you MUST research topics first!**
 
----
-
-## Available Tools
-
-### Get Context
-- `unispec_read_spec {topic, area}` - Read spec requirements
-- `tasks_list {topic, area}` - See what tasks need doing
-- `index_find {query, by}` - Find files linked to this spec
-- `index_backlinks {topic}` - See what references this spec
-
-### Track Progress
-- `tasks_complete {topic, task_index, note, area}` - Mark task complete
-- `tasks_incomplete {topic, task_index, note, area}` - Mark task incomplete
-- `notes_add {topic, note, area}` - Add implementation notes
-- `topics_progress [area]` - See overall progress
-
-### Link New Files
-- `index_add {topic, path, area, link_type, tags, annotation}` - Link new file to spec
-- `unispec_bind_spec {spec_path, file_path, topic, area}` - Bind code file to spec
-
-### Move Work
-- `topics_push {topic, area}` - Move to next area
-- `topics_pull {topic, source_area}` - Pull back to Working
-
-### Query Index
-- `index_graph` - See full relationship graph
-- `index_find {query, by}` - Find by topic/path/tag
-- `index_lookup {id}` - Find by export ID
+1. **ALWAYS start by listing topics** - Never assume you know what's being built
+2. **ALWAYS read the topic first** - Understand the scope before building
+3. **Topics define scope** - Each topic bounds what specs are being implemented
 
 ---
 
-## BUILD Workflow Steps
+## READINESS SYSTEM - IMPORTANT!
 
-### Step 1: Pick Up Work
+A topic is ONLY ready to push if it is listed in the area's `queue.md` file (e.g., `Staging/queue.md`).
+
+**Why?**
+- Prevents pushing topics that aren't ready
+- Ensures all work is tracked in the central to-do list
+- Queue is deleted when moving from Working → Testing
+
+**How to verify:**
 ```
-# Check queue for priority
-queue_list
-
-# Get first item from queue
-queue_list
-
-# Read the spec for that topic
-unispec_read_spec {topic: "feature-name", area: "Working"}
-
-# See what tasks need doing
-tasks_list {topic: "feature-name", area: "Working"}
+# Check if topic is in the area queue
+queue_check {topic: "<topic-name>", area: "Staging"}
 ```
 
-### Step 2: Understand Requirements
-Read the spec carefully. Understand:
-- What needs to be built
-- The expected behavior
-- Any constraints or requirements
-
-### Step 3: Find Existing Files
+If `ready: true`, you can push. If `ready: false`, add it first:
 ```
-# Find files already linked to this spec
-index_find {query: "feature-name", by: "topic"}
-
-# See all files in the project
-index_graph
-```
-
-### Step 4: Implement
-Write the code to match the spec. Key rules:
-- Follow the spec exactly
-- Create one task worth of work at a time
-- Test as you go
-
-### Step 5: Link New Files
-```
-# After creating a new file, link it to the spec
-index_add {topic: "feature-name", path: "src/new_file.rs", link_type: "implementation", tags: "feature"}
-```
-
-### Step 6: Update Tasks
-```
-# Mark the task you completed as done
-tasks_complete {topic: "feature-name", task_index: 0}
-
-# Or add a note about what you did
-tasks_complete {topic: "feature-name", task_index: 0, note: "Implemented user login"}
-```
-
-### Step 7: Add Notes
-```
-# Track implementation decisions
-notes_add {topic: "feature-name", note: "Using bcrypt for password hashing"}
-```
-
-### Step 8: Verify
-```
-# Check what files are now linked
-index_find {query: "feature-name", by: "topic"}
-
-# See full graph
-index_graph
-```
-
-### Step 9: Push to Next Area
-```
-# When all tasks complete, push to Testing
-topics_push {topic: "feature-name", area: "Testing"}
+queue_add {topic: "<topic-name>", area: "Staging"}
 ```
 
 ---
 
-## TESTING Phase
+## The BUILD Workflow
 
-When topic is in Testing area:
+### Step 0: Research Topics FIRST
+1. **List all topics in Staging:**
+   ```
+   topics_list {area: "Staging"}
+   ```
 
-### Step 1: Read Spec Again
-```
-unispec_read_spec {topic: "feature-name", area: "Testing"}
-tasks_list {topic: "feature-name", area: "Testing"}
-```
+2. **Read the topic:**
+   ```
+   topic_read {topic: "<topic-name>", area: "Staging"}
+   ```
 
-### Step 2: Run Tests
-Run your project's test suite:
-```bash
-# Run tests (example)
-cargo test
-# or
-npm test
-```
-
-### Step 3: Fix Issues
-If tests fail:
-- Understand the error
-- Fix the code
-- Update the task status
-
-### Step 4: Push or Pull
-```
-# If all tests pass, push to Fixing (final review) or Build
-topics_push {topic: "feature-name", area: "Fixing"}
-
-# If issues found, can pull back to Working
-topics_pull {topic: "feature-name", source_area: "Testing"}
-```
-
----
-
-## FIXING Phase
-
-When topic is in Fixing area:
-
-### Step 1: Review Issues
-```
-# See what's been linked
-index_find {query: "feature-name", by: "topic"}
-
-# Check task status
-tasks_list {topic: "feature-name", area: "Fixing"}
-```
-
-### Step 2: Fix
-Make necessary changes, link any modified files:
-```
-index_add {topic: "feature-name", path: "src/fixed_file.rs", link_type: "implementation"}
-```
-
-### Step 3: Push to Build
-```
-# When all fixes are done
-topics_push {topic: "feature-name", area: "Build"}
-```
-
----
-
-## BUILD Phase (Final)
-
-When topic is in Build area:
-
-### Step 1: Final Verification
-```
-# Get full picture
-index_graph
-index_backlinks {topic: "feature-name"}
-```
-
-### Step 2: Run Build
-```bash
-# Run build command
-cargo build --release
-# or
-npm run build
-```
-
-### Step 3: Done
-The feature is complete!
-
----
-
-## Key Rules for BUILD Workflow
-
-1. **Read the spec first** - Never code without understanding the requirements
-
-2. **One task at a time** - Work through tasks sequentially
-
-3. **Mark progress** - Update tasks as you complete them
-
-4. **Link every file** - Use `index_add` for every file you create or modify
-
-5. **Add notes** - Track implementation decisions in notes
-
-6. **Test as you go** - Run tests frequently
-
-7. **Verify with index** - Use `index_find` and `index_graph` to understand relationships
-
----
-
-## Example: Implementing a Feature
+### Step 1: Check Readiness FIRST
+**Before pushing anything, check if the topic is in the area queue:**
 
 ```
-# Start: Get work from queue
-queue_list
-# Say queue shows: ["user-auth"]
+queue_check {topic: "<topic-name>", area: "Staging"}
+```
 
-# Read the spec
-unispec_read_spec {topic: "user-auth", area: "Working"}
+If not ready, add it:
+```
+queue_add {topic: "<topic-name>", area: "Staging"}
+```
 
-# See tasks
-tasks_list {topic: "user-auth", area: "Working"}
-# Say tasks are: ["Create auth module", "Add login endpoint", "Add logout endpoint"]
+**This is REQUIRED - you cannot push a topic that's not in the queue!**
 
-# Task 0: Create auth module
-# (Write code in src/auth/)
+### Step 2: Find queue.md in Staging
+**Look for the area queue.md file in Staging to know what to build:**
+```
+queue_list {area: "Staging"}
+```
 
-# Link the new file
-index_add {topic: "user-auth", path: "src/auth/mod.rs", link_type: "implementation", tags: "auth"}
+The queue.md is the CENTRAL TO-DO LIST in the AREA (e.g., `Staging/queue.md`). It contains ALL topics that need to be built.
 
-# Mark task complete
-tasks_complete {topic: "user-auth", task_index: 0}
+### Step 3: Create /src FIRST
+**Before writing any code, create /src at project root:**
+```
+# At project root (same level as spec/)
+# Create src/ directory - ALL code goes here
+```
 
-# Task 1: Add login endpoint
-# (Write code)
+### Step 4: Push the Topic to Working
+**Push a topic that is listed in the queue:**
+```
+topics_push {topic: "<topic-name>", area: "Working"}
+```
 
-# Link it
-index_add {topic: "user-auth", path: "src/auth/login.rs", link_type: "implementation", tags: "auth,login"}
+This pushes the topic. The queue.md stays in Staging.
 
-# Mark complete
-tasks_complete {topic: "user-auth", task_index: 1}
+### Step 5: Read queue.md in Working
+```
+queue_list {area: "Working"}
+```
 
-# Add implementation note
-notes_add {topic: "user-auth", note: "Using JWT tokens with 1hr expiry"}
+### Step 6: Build Each Topic in Order
+For each topic in the queue:
 
-# Check progress
-tasks_list {topic: "user-auth", area: "Working"}
+1. **Read spec and task files:**
+   ```
+   spec_read {topic: "<topic-name>", area: "Working"}
+   task_read {topic: "<topic-name>", area: "Working"}
+   ```
 
-# When all done, push to Testing
-topics_push {topic: "user-auth", area: "Testing"}
+2. **Create code in /src** (NOT in topic directories)
+
+3. **Link every file:**
+   ```
+   index_add {topic: "<topic-name>", path: "src/filename.rs", link_type: "implementation", tags: "..."}
+   ```
+
+4. **CHECK OFF TASKS IMMEDIATELY - THIS IS REQUIRED!**
+   After completing each task, mark it complete:
+   ```
+   task_write {topic: "<topic-name>", area: "Working", content: "..."}
+   ```
+   Change `- [ ]` to `- [x]` for completed tasks.
+
+   **NEVER skip this step! Always check off completed tasks before moving to the next one.**
+
+### Step 7: Add Testing Tasks Before Pushing to Testing
+**Testing tasks are ONLY created here - AFTER all implementation is done:**
+```
+task_read {topic: "<topic-name>", area: "Working"}
+```
+
+Add testing tasks at the end of task.md:
+```
+## Testing (added before moving to Testing)
+
+- [ ] **T1** [Test the implementation]
+- [ ] **T2** [Verify it works as expected]
+```
+
+**This is the ONLY place for testing tasks - they are added AFTER development is complete, right before moving to Testing.**
+
+### Step 8: Push to Testing
+When done with testing tasks added, push to Testing - queue.md is automatically deleted:
+```
+topics_push {topic: "<topic-name>", area: "Testing"}
 ```
 
 ---
 
-## Example: Fixing an Issue
+## Key Rules
+
+0. **CREATE /src FIRST** - Before any code
+
+1. **MUST be in queue** - Topic must be listed in area queue.md to be pushable
+
+2. **ALL code in /src** - At project root, never in topic directories
+
+3. **Link every file** - Use index_add
+
+4. **CHECK OFF TASKS RELIGIOUSLY** - After completing each task, mark it complete with `- [x]`. NEVER skip this!
+
+5. **Add testing tasks last** - Before pushing to Testing, add test tasks
+
+6. **Queue deleted at Testing** - Normal behavior
+
+---
+
+## Queue File Location
+
+**The queue.md is in the AREA, not in topic folders:**
+```
+spec/
+├── Staging/
+│   └── queue.md    ← Central to-do list for Staging
+├── Working/
+│   └── queue.md    ← Central to-do list for Working
+└── ...
+```
+
+---
+
+## Example
 
 ```
-# Topic in Fixing area
-unispec_read_spec {topic: "bug-fix", area: "Fixing"}
-tasks_list {topic: "bug-fix", area: "Fixing"}
+# Check if topic is in queue
+queue_check {topic: "auth", area: "Staging"}
+# If not ready, add it:
+queue_add {topic: "auth", area: "Staging"}
 
-# Make fix
-# (edit the code)
+# List what's in the queue
+queue_list {area: "Staging"}
 
-# Link the fixed file
-index_add {topic: "bug-fix", path: "src/fixed.rs", link_type: "implementation"}
+# Push to Working
+topics_push {topic: "auth", area: "Working"}
 
-# Push to Build
-topics_push {topic: "bug-fix", area: "Build"}
+# Build in Working
+# ... create files in /src ...
+# ... check off tasks ...
+
+# Add testing tasks, then push to Testing
+topics_push {topic: "auth", area: "Testing"}
 ```
