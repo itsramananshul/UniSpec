@@ -1,6 +1,16 @@
 # Creating Modes
 
-Modes define how you work with UniSpec. The shipped default mode (`.agent/modes/default/`) uses a five-area pipeline: `Staging → Working → Testing → Fixing → Build`. You can create custom modes for different workflows (kanban, sprint, RFC, docs).
+Modes define how you work with UniSpec. The shipped default mode (`.agent/modes/default/`) uses the five-area pipeline `Staging → Working → Testing → Fixing → Build`. You can build custom modes for different workflows (kanban, sprint, RFC, docs).
+
+## The default mode is embedded in the binary
+
+`unispec init` no longer relies on a system-wide install or a manually-staged `simple` mode directory. The entire default mode tree (`mode.toml`, `skill.md`, `templates/`, `areas/`, `workflows/`, `system_prompts/`) is bundled into the binary at compile time via the `include_dir` crate. On `init`:
+
+1. If `~/.config/unispec/.agent/modes/default/` exists, it is copied from there (so power users can keep an overridden default globally).
+2. Else if `/usr/share/unispec/.agent/modes/default/` exists, it is copied from there (so distro packagers can install one).
+3. Else the embedded copy is extracted to `.agent/modes/default/` in the project.
+
+The init success line reports which source was used: `UniSpec initialized with default mode (source: embedded)` / `(source: global)` / `(source: system)`. After init, the project always has a fully-populated `default` mode regardless of system state — no manual copy step is required.
 
 ## What is a Mode?
 

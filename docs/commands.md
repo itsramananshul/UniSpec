@@ -287,7 +287,7 @@ unispec topic <subcommand>
 Create a new topic in an area.
 
 ```bash
-unispec topic add <name> [OPTIONS]
+unispec topic add <name> --short <description> --content <body> [OPTIONS]
 ```
 
 | Argument | Description |
@@ -296,15 +296,21 @@ unispec topic add <name> [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `-a, --area <area>` | Area to create topic in (default: Working) |
+| `-a, --area <area>` | Area to create topic in. Defaults to `.agent/config.toml`'s `area`, then `"Staging"`. |
+| `-s, --short <text>` | One-line description (required). |
+| `-c, --content <text>` | Topic body content (required; ≥ 20 chars). |
 
 **Example:**
 ```bash
-# Create topic in Working area
-unispec topic add "User Authentication"
+# Default area from config (falls back to Staging)
+unispec topic add user-login \
+  --short "Email/password login" \
+  --content "Authentication system with JWT and refresh tokens."
 
-# Create topic in Staging area
-unispec topic add "API Redesign" -a Staging
+# Explicit area override
+unispec topic add api-redesign -a Working \
+  --short "REST surface revamp" \
+  --content "Move every endpoint to /v2 with consistent error envelopes."
 ```
 
 #### List
@@ -317,18 +323,18 @@ unispec topic list [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `-a, --area <area>` | Area to list topics from (default: Working) |
-| `-h, --hierarchy` | Show hierarchical view with nested topics |
+| `-a, --area <area>` | Area to list topics from. Defaults to config, then `"Staging"`. |
+| `-H, --hierarchy` | Show hierarchical view with nested topics. |
 
 **Example:**
 ```bash
-# List topics in Working area
+# Default area
 unispec topic list
 
-# List topics in Staging area
-unispec topic list -a Staging
+# Explicit area
+unispec topic list -a Working
 
-# Show hierarchical view
+# Hierarchical view
 unispec topic list -a Working --hierarchy
 ```
 
@@ -371,61 +377,59 @@ Use `--from` to view specific area's files, or `--all` to see everything.
 
 #### Push
 
-Move (push) a topic to another area.
+Move a topic to another area. Source files are removed (this is a move, not a copy).
 
 ```bash
-unispec topic push <name> <area> [OPTIONS]
+unispec topic push <name> [OPTIONS]
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `name` | Name of the topic to move |
-| `area` | Target area to move to |
 
 | Option | Description |
 |--------|-------------|
-| `--from <area>` | Source area (auto-detected from default area if not specified) |
+| `-a, --area <target>` | Target area. Defaults to config's `area`, then `"Staging"`. |
+| `-f, --from <source>` | Source area. Defaults to config's `area`, then `"Staging"`. |
 
 **Example:**
 ```bash
-# Push topic to Build area (auto-detects source)
-unispec topic push "User Authentication" Build
+# Explicit source and target
+unispec topic push user-login --area Working --from Staging
 
-# Push from specific area
-unispec topic push "User Authentication" Working --from Staging
+# Target area implied by config (e.g. config.area = "Working")
+unispec topic push user-login --from Staging
 ```
 
-**Behavior:**
-- Copies source area files to target area (keeps original files)
-- Creates new target area files from target area's templates
-- This allows topics to have files from multiple areas visible via `topic show --all`
+**Readiness gate.** When the source area is `Staging` or `Fixing`, the topic must first appear in `spec/<source>/queue.md`. Run `unispec queue add <name>` (or `--area Fixing`) first. See [queue](#queue) below.
+
+**Auto-area creation.** If the target area directory doesn't exist yet, push creates it on the fly with a minimal `area.md` stub. This is useful when an init created fewer than the five pipeline areas, or when the user has custom areas they haven't materialized yet.
 
 #### Pull
 
-Pull a topic from another area to the current area.
+Pull a topic from another area into the current area.
 
 ```bash
-unispec topic pull <name> <area> [OPTIONS]
+unispec topic pull <name> [OPTIONS]
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `name` | Name of the topic to pull |
-| `area` | Source area to pull from |
 
 | Option | Description |
 |--------|-------------|
-| `-t, --target <area>` | Target area (default: Working) |
+| `-a, --area <source>` | Source area to pull from. Defaults to config's `area`, then `"Staging"`. |
 
 **Example:**
 ```bash
-# Pull topic from Staging to Working
-unispec topic pull "API Redesign" Staging
+# Pull into the current default area
+unispec topic pull api-redesign --area Staging
 ```
 
 #### Remove
 
-Delete a topic.
+Delete a topic from an area.
 
 ```bash
 unispec topic remove <name> [OPTIONS]
@@ -437,15 +441,16 @@ unispec topic remove <name> [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `-f, --force` | Remove without confirmation |
+| `-a, --area <area>` | Area the topic lives in. Defaults to config's `area`, then `"Staging"`. |
+| `-f, --force` | Remove without confirmation. |
 
 **Example:**
 ```bash
-# Remove with confirmation
-unispec topic remove "Old Feature"
+# Confirm-then-delete from default area
+unispec topic remove old-feature
 
-# Force remove without confirmation
-unispec topic remove "Old Feature" --force
+# Force-delete from a specific area
+unispec topic remove old-feature --area Working --force
 ```
 
 #### Progress
@@ -468,6 +473,99 @@ unispec topic progress
 # Show progress for specific area
 unispec topic progress -a Staging
 ```
+
+---
+
+## Spec
+
+Create and view per-topic spec/task files.
+
+```bash
+unispec spec <subcommand>
+```
+
+### Subcommands
+
+#### Add
+
+Create `<topic>_spec.md` and `<topic>_task.md` for a topic. The topic must already exist (via `topic add`). Slashes and spaces in the topic name are replaced with `-` when building the filename, so a topic `auth/login` produces `auth-login_spec.md` and `auth-login_task.md` inside `spec/<area>/auth/login/`.
+
+```bash
+unispec spec add --topic <name> --short <desc> --spec-content <body> --task-content <tasks> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-t, --topic <name>` | Required. Topic name (`parent/child` for nested topics). |
+| `-s, --short <text>` | Required. One-line description. |
+| `--spec-content <text>` | Required. Spec body (≥ 11 chars). `allow_hyphen_values` is enabled — values starting with `- ` (markdown bullets) are accepted as content, not parsed as flags. |
+| `--task-content <text>` | Required. Task body (≥ 11 chars). Same hyphen-value handling. |
+| `-a, --area <area>` | Area for the topic. Defaults to config's `area`, then `"Staging"`. |
+
+**Example:**
+```bash
+unispec spec add \
+  --topic user-login \
+  --short "Email/password login design" \
+  --spec-content "POST /login accepts {email, password}, returns {jwt}." \
+  --task-content "- [ ] POST /login route
+- [ ] JWT signing helper
+- [ ] Integration tests"
+```
+
+The server writes the canonical frontmatter (`title`, `short`, `created`, `author`, `status: draft` for spec; `spec`, `short`, `status: pending`, `date` for task). Do not include a `---` frontmatter block in either body — it is stripped before the canonical frontmatter is prepended.
+
+#### Show
+
+Show the master spec file at `spec/master.md`, if present.
+
+```bash
+unispec spec show [name]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Optional name. Defaults to `"master"`. Currently the handler reads `spec/master.md` regardless. |
+
+---
+
+## Queue
+
+Manage area readiness queues (`spec/<area>/queue.md`). Topics in `Staging` and `Fixing` must be listed in the queue before `topic push` will move them out.
+
+```bash
+unispec queue <subcommand>
+```
+
+### Subcommands
+
+#### Add
+
+Append a topic to an area's queue. (Or insert at a specific 0-based slot via `--position`.)
+
+```bash
+unispec queue add <topic> [OPTIONS]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `topic` | Topic name to enqueue. |
+
+| Option | Description |
+|--------|-------------|
+| `-a, --area <area>` | Queue's area. Defaults to config's `area`, then `"Staging"`. |
+| `-p, --position <n>` | 0-based index. Negative or out-of-range = append to end (default: `-1`). |
+
+**Example:**
+```bash
+# Add to the Staging queue (config default)
+unispec queue add user-login
+
+# Add to the Fixing queue, at the front
+unispec queue add user-login --area Fixing --position 0
+```
+
+The MCP `queue_add`, `queue_remove`, `queue_check`, `queue_list`, and `queue_reorder` tools expose the same readiness queue programmatically — see [mcp-tools-reference.md](mcp-tools-reference.md).
 
 ---
 

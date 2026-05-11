@@ -233,8 +233,17 @@ See [indexing.md](indexing.md) for the full feature set.
 
 ## What's next?
 
+- [Quickstart](quickstart.md) — same content, five minutes, copy-pasteable
+- [Workflow](workflow.md) — the five-area pipeline rules
+- [Areas](areas.md) — what each area is for
+- [TUI Guide](tui.md) — every keybinding and screen
 - [CLI Reference](cli-reference.md) — every subcommand and flag (the up-to-date reference)
 - [Commands Reference](commands.md) — older long-form CLI documentation
+- [MCP Tools Reference](mcp-tools-reference.md) — every MCP tool, JSON-RPC examples
+- [MCP Integration](mcp-integration.md) — editor configs
+- [Connectors](connectors.md) — shell commands as MCP tools
+- [Architecture](architecture.md) — codebase layout
+- [Troubleshooting](troubleshooting.md) — common errors
 - [MCP Integration](mcp.md) — every MCP tool the server exposes
 - [Modes](modes.md) — customize the pipeline (areas, templates, workflows)
 - [Configuration](configuration.md) — `.agent/config.toml`, env vars, exit codes

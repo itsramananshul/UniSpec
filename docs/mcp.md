@@ -1,17 +1,24 @@
 # MCP Integration
 
-UniSpec ships an MCP (Model Context Protocol) server so editors like Claude, Cursor, Windsurf, Cline, and any MCP-aware client can read your specs and drive your workflow.
+UniSpec ships an MCP (Model Context Protocol) server so editors like Claude Code, Cursor, Windsurf, Cline, Zed, and any MCP-aware client can read your specs and drive your workflow.
+
+> **Looking for per-tool JSON-RPC examples?** See [mcp-tools-reference.md](mcp-tools-reference.md). For editor-side configuration, see [mcp-integration.md](mcp-integration.md).
 
 ## What MCP lets you do
 
 - Inspect every area, topic, spec, and task.
 - Create and update topics, specs, and tasks through structured tool calls.
 - Move topics through the pipeline and manage the readiness queue.
+- Flip task checkboxes, add notes, reorder the queue.
 - Link source files to specs and query the index.
 
 ## Available MCP tools (ground truth)
 
-The MCP server publishes exactly these 31 tools (plus one dynamic tool per connector you've defined). This list is generated from `src/mcp/mod.rs::get_tools()`; if you don't see a tool here, it's not exposed via MCP.
+The MCP server publishes exactly **31 built-in tools** (plus one dynamic `unispec_<name>` tool per connector you've defined). This list is generated from `src/mcp/mod.rs::get_tools()`; if you don't see a tool here, it's not exposed via MCP.
+
+### Filename convention (important)
+
+Topic spec and task files are written as **`<topic-safe>_spec.md`** and **`<topic-safe>_task.md`**, where `<topic-safe>` is the topic name with `/` and ` ` replaced by `-`. For a topic `auth/login` you get `auth-login_spec.md` and `auth-login_task.md` inside `spec/<Area>/auth/login/`. Every read tool (`unispec_read_spec`, `read_asset`, `topics_show`) and every write tool (`spec_add`, `spec_write`, `task_write`, `task_status`) uses this convention. The legacy `spec.md` / `task.md` filenames are not used.
 
 ### Areas
 
