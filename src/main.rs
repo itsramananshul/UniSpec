@@ -224,6 +224,7 @@ fn main() -> Result<()> {
                 topic::run_list(&area, false)?
             }
             TopicCommands::Push { topic, area, from } => {
+                let area = resolve_area_from_config(area);
                 topic::run_push(&topic, &area, from.as_deref())?;
                 if get_show_platypus() {
                     platypus::working();

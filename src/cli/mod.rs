@@ -463,10 +463,13 @@ pub enum TopicCommands {
     Push {
         /// Name of the topic to push
         topic: String,
-        /// Target area to push to
-        area: String,
-        /// Source area to push from
-        #[arg(long)]
+        /// Target area to push to. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
+        /// Source area to push from. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
         from: Option<String>,
     },
     /// Pull a topic from another area
