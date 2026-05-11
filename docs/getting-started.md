@@ -83,7 +83,17 @@ In the TUI:
 3. Type a name (kebab-case recommended, e.g., `user-login`).
 4. `Enter`.
 
-That creates `spec/Staging/user-login/topic.md`. The spec file (`user-login_spec.md`) and task file (`user-login_task.md`) are written when you (or your agent) run `spec_add` through the MCP server.
+That creates `spec/Staging/user-login/topic.md`. The spec file (`user-login_spec.md`) and task file (`user-login_task.md`) are written by `unispec spec add` (or by an agent via the MCP `spec_add` tool):
+
+```bash
+unispec spec add \
+  --topic user-login \
+  --short "Email/password login with JWT" \
+  --spec-content "Users submit email/password to POST /login. ..." \
+  --task-content "- [ ] Implement POST /login
+- [ ] Add JWT signing
+- [ ] Write tests"
+```
 
 ---
 
@@ -115,12 +125,19 @@ For a nested topic `auth/login`, the files are `auth-login_spec.md` and `auth-lo
 To move a topic between areas:
 
 ```bash
-unispec topic push <topic> <target-area>
+unispec topic push <topic> --area <target> --from <source>
 ```
 
-Or in the TUI, select the topic and press `p`.
+Both `--area` and `--from` default to the area set in `.agent/config.toml` when omitted (falling back to `Staging`). Or in the TUI, highlight the topic and press `p`.
 
-`Staging` and `Fixing` require the topic to be listed in `spec/<area>/queue.md` before push (the "readiness queue"). The CLI doesn't have a direct command for that yet — your agent or the MCP `queue_add` tool handles it.
+`Staging` and `Fixing` are gated by a **readiness queue**: a topic must appear in `spec/<area>/queue.md` before it can be pushed out. Use the CLI directly:
+
+```bash
+unispec queue add <topic>                        # add to current area's queue
+unispec queue add <topic> --area Fixing          # explicit area override
+```
+
+The MCP `queue_add` tool exposes the same logic for AI agents. From inside the TUI, you can also press `q` while highlighting a topic to add it to the current area's queue.
 
 ---
 
@@ -131,14 +148,15 @@ Or in the TUI, select the topic and press `p`.
 | `↑` / `↓` | Move between items |
 | `→` | Enter an area or topic |
 | `←` | Go back |
-| `Enter` | Open the highlighted file in your default editor |
+| `Enter` | Open the highlighted file in `$EDITOR`, then `nano`, then `vi`; falls back to printing content if none found |
 | `n` | Create new topic |
 | `r` | Remove topic (confirm) |
 | `p` | Push topic to another area |
 | `f` | Find files linked to this topic |
 | `/` | Search/filter |
 | `\` | Toggle the platypus mascot |
-| `q` | Quit |
+| `q` | Add the highlighted topic to the area queue (when inside a TopicList) |
+| `q` | Quit (when on the area-selection screen) |
 
 Your specs are plain Markdown — open them in any editor. `unispec topic list` works from the command line too.
 
@@ -147,21 +165,26 @@ Your specs are plain Markdown — open them in any editor. `unispec topic list` 
 ## Quick CLI reference
 
 ```bash
-unispec                      # launch TUI
-unispec init                 # initialize project
-unispec topic add "Feature"  # create a topic in the default area (Staging)
-unispec topic list           # list topics in the default area
-unispec topic progress       # task progress per area
-unispec topic push <name> <area>
+unispec                                        # launch TUI
+unispec init                                   # initialize project
+unispec topic add <name> --short "..." \
+  --content "..."                              # create a topic in the default area
+unispec topic list                             # list topics in the default area
+unispec topic progress                         # task progress per area
+unispec spec add --topic <name> --short "..." \
+  --spec-content "..." --task-content "..."    # write spec + task files
+unispec queue add <name>                       # add to the area readiness queue
+unispec topic push <name> --area <target> \
+  --from <source>                              # move between areas
 unispec area list
 unispec area health
 unispec index add --topic <name> --path <path>
 unispec mode list
 unispec mode activate <mode>
-unispec mcp                  # start the MCP server (for agents)
+unispec mcp                                    # start the MCP server (for agents)
 ```
 
-For the complete CLI surface, see [commands.md](commands.md).
+For the complete CLI surface, see [cli-reference.md](cli-reference.md) (or the legacy [commands.md](commands.md)).
 
 ---
 
@@ -197,7 +220,7 @@ When an agent (or you) writes a code file, link it to a topic so the spec ↔ co
 
 ```bash
 unispec index add --topic user-login --path src/auth/login.rs \
-  --link_type implementation \
+  --link-type implementation \
   --tags "auth,backend" \
   --annotation "Core login handler"
 ```
@@ -210,7 +233,8 @@ See [indexing.md](indexing.md) for the full feature set.
 
 ## What's next?
 
-- [Commands Reference](commands.md) — all CLI commands and flags
+- [CLI Reference](cli-reference.md) — every subcommand and flag (the up-to-date reference)
+- [Commands Reference](commands.md) — older long-form CLI documentation
 - [MCP Integration](mcp.md) — every MCP tool the server exposes
 - [Modes](modes.md) — customize the pipeline (areas, templates, workflows)
 - [Configuration](configuration.md) — `.agent/config.toml`, env vars, exit codes
