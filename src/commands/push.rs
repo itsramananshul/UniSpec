@@ -38,9 +38,10 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
     }
 
     copy_dir_recursive(&src, &dst)?;
+    fs::remove_dir_all(&src)?;
 
     Ok(format!(
-        "✅ Pushed topic '{}' from {} to {}",
+        "✅ Moved topic '{}' from {} to {}",
         topic, source_area, target_area
     ))
 }
