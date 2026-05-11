@@ -4,21 +4,17 @@ Complete reference for UniSpec configuration files, environment variables, and s
 
 ---
 
-## Configuration Hierarchy
+## Configuration hierarchy
 
-UniSpec uses a three-level configuration hierarchy:
+UniSpec searches three levels (most specific first):
 
-```
-System (install-wide)
-    ↓
-Global (user-wide)  
-    ↓
-Local (project-specific)
-```
+1. **Local** — `./.agent/` (project-specific). First win.
+2. **Global** — `~/.config/unispec/` (user-wide).
+3. **System** — `/usr/share/unispec/` on Linux (install-wide).
 
-### Level 1: System (Install-Wide)
+Local values override global, which override system.
 
-Shared across all users on the system. Located at:
+### Level 1: System
 
 | Platform | Path |
 |----------|------|
@@ -26,92 +22,63 @@ Shared across all users on the system. Located at:
 | macOS | `/usr/local/share/unispec/` |
 | Windows | `%ProgramData%\unispec\` |
 
-Contains:
-- Default modes (e.g., `simple`)
-- Default area templates
-- System-wide workflows
+Contains default modes, area templates, and system-wide workflows.
 
-### Level 2: Global (User-Wide)
-
-Per-user configuration. Located at:
+### Level 2: Global
 
 | Platform | Path |
 |----------|------|
-| Linux | `~/.config/unispec/` |
-| macOS | `~/.config/unispec/` |
+| Linux / macOS | `~/.config/unispec/` |
 | Windows | `%APPDATA%\unispec\` |
 
-Contains:
-- Custom modes (`.agent/modes/`)
-- Custom area templates (`.agent/areas/`)
-- User preferences
+Contains user-installed modes, area templates, and preferences.
 
-### Level 3: Local (Project-Specific)
-
-Per-project configuration. Located in your project directory:
+### Level 3: Local
 
 ```
 project/
-├── .agent/           ← Project-level config
+├── .agent/
 │   ├── config.toml
+│   ├── skill.md
 │   ├── modes/
 │   └── workflows/
-└── spec/             ← Topic specs
+└── spec/
     ├── Staging/
     ├── Working/
     └── Build/
 ```
 
-Contains:
-- Project-specific config (`.agent/config.toml`)
-- Active mode (local copy)
-- Project topics
-
-### Priority
-
-When loading configurations, UniSpec searches in this order:
-1. Local (project) → 2. Global (user) → 3. System (install)
-
-This means:
-- Local configs override global configs
-- Global configs override system defaults
-- You can always customize at the project level
-
 ---
 
-## Configuration Files
+## `.agent/config.toml` (Local)
 
-### `.agent/config.toml` (Local)
-
-Main configuration file for the UniSpec agent system. Created in your project root under `.agent/config.toml`.
+Main project-level configuration. Fields below match what the CLI actually reads (`src/fs/config.rs`).
 
 ```toml
-# UniSpec Agent Configuration
+# Currently active mode (must match a directory name under .agent/modes/, ~/.config/unispec/.agent/modes/, or the system path).
+current_mode = "default"
 
-# Current active mode (default: "simple")
-current_mode = "simple"
+# Default area for tools that accept an optional `area` argument.
+area = "Staging"
 
-# Default area for topic operations
-default_area = "Working"
+# Areas that refuse area_remove / destructive operations.
+protected_areas = []
 
-# Protected areas that cannot be deleted
-protected_areas = ["Staging", "Working", "Build"]
+# Show the platypus mascot in the TUI.
+paddy_enabled = false
 
-# Enable/disable platypus mascot
-paddy_enabled = true
-
-# Ingest Configuration - How code is analyzed and stored
+# Ingest configuration — how `unispec ingest run` parses and stores code analysis.
 [ingest]
-auto_index = true              # Automatically add to index when ingesting
-index_on_complete = false       # Index when topic is marked complete (future)
-capture_functions = true       # Extract functions from code
-capture_structs = true         # Extract structs from code
-capture_enums = true           # Extract enums from code
-capture_imports = true         # Extract imports from code
-output_format = "toml"         # Output format: "toml", "md", or "both"
-languages = []                 # Languages to parse (empty = all: rust, javascript, typescript, python, go, bash)
+auto_index = false                # Auto-add ingested files to the index
+index_on_complete = false         # Re-index when a topic is marked complete
+capture_functions = true
+capture_structs = true
+capture_enums = true
+capture_imports = true
+output_format = "toml"            # "toml" | "md" | "both"
+languages = []                    # Empty = all supported: rust, javascript, typescript, python, go, bash
 
-# Connectors - Custom commands that become MCP tools
+# Connectors — shell commands exposed as MCP tools (unispec_<name>).
 [[connector]]
 name = "test"
 description = "Run test suite"
@@ -122,191 +89,126 @@ working_dir = "/project/root"
 timeout = 120
 ```
 
-### Configuration Options
+### Field reference
 
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `current_mode` | string | Active agent mode | `"simple"` |
-| `default_area` | string | Default area for operations | `"Working"` |
-| `protected_areas` | array | Areas that cannot be deleted | `["Staging", "Working", "Build"]` |
-| `paddy_enabled` | boolean | Show platypus mascot in TUI | `true` |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `current_mode` | string | `"default"` | Active mode (directory under `.agent/modes/`). |
+| `area` | string | `"Staging"` | Default area used when a tool omits `area`. |
+| `protected_areas` | array<string> | `[]` | Areas protected from deletion. |
+| `paddy_enabled` | bool | `false` | Show the platypus mascot in the TUI. |
 
-### Ingest Configuration Options
+### `[ingest]`
 
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `ingest.auto_index` | boolean | Auto-add to index.toml on ingest | `false` |
-| `ingest.index_on_complete` | boolean | Index when topic marked complete | `false` |
-| `ingest.capture_functions` | boolean | Extract functions | `true` |
-| `ingest.capture_structs` | boolean | Extract structs | `true` |
-| `ingest.capture_enums` | boolean | Extract enums | `true` |
-| `ingest.capture_imports` | boolean | Extract imports | `true` |
-| `ingest.output_format` | string | Storage format: "toml", "md", "both" | `"toml"` |
-| `ingest.languages` | array | Specific languages to parse | `[]` (all) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `auto_index` | bool | `false` | Add ingested files to the link index. |
+| `index_on_complete` | bool | `false` | Re-index when a topic completes. |
+| `capture_functions` | bool | `true` | Extract function declarations. |
+| `capture_structs` | bool | `true` | Extract struct/class declarations. |
+| `capture_enums` | bool | `true` | Extract enums. |
+| `capture_imports` | bool | `true` | Extract imports/use statements. |
+| `output_format` | string | `"toml"` | `"toml"` writes `spec/code_analysis.toml`; `"md"` writes per-file markdown; `"both"` writes both. |
+| `languages` | array<string> | `[]` | Restrict parsing to these languages. Empty = all supported. |
 
-### Supported Languages for Ingest
+### `[[connector]]`
 
-| Language | Extensions | Grammar |
-|----------|------------|---------|
-| Rust | `.rs` | tree-sitter-rust |
-| JavaScript | `.js`, `.jsx` | tree-sitter-javascript |
-| TypeScript | `.ts`, `.tsx` | tree-sitter-typescript |
-| Python | `.py` | tree-sitter-python |
-| Go | `.go` | tree-sitter-go |
-| Bash | `.sh`, `.bash` | tree-sitter-bash |
+Each connector becomes an MCP tool named `unispec_<name>` automatically.
 
-### Connector Configuration
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Lowercase, underscores only. |
+| `description` | string | Shown in `connector_list` output. |
+| `command` | string | Executable to run. |
+| `args` | array<string> | Default args, prepended before any extra args. |
+| `env` | table | Environment variables. |
+| `working_dir` | string | Working directory. |
+| `timeout` | integer | Timeout in seconds. |
 
-Each connector in the config file:
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `name` | string | Connector identifier (lowercase, underscores only) |
-| `description` | string | Human-readable description |
-| `command` | string | Shell command to execute |
-| `args` | array | Command arguments |
-| `env` | table | Environment variables |
-| `working_dir` | string | Working directory for command |
-| `timeout` | integer | Timeout in seconds |
+Supported parser languages: `rust`, `javascript`, `typescript`, `python`, `go`, `bash`.
 
 ---
 
-## Global Modes
+## Modes
 
-Modes can be installed at the global level to be available across all projects.
+See [modes.md](modes.md) for the full mode reference. A mode is a directory under `.agent/modes/<name>/` containing `mode.toml`, `skill.md`, optional `workflows/`, `areas/`, and `templates/`.
 
-### Global Mode Directory
-
-```
-~/.config/unispec/
-└── .agent/
-    └── modes/
-        ├── simple/
-        ├── sprint/
-        └── custom-mode/
-```
-
-### Installing Modes Globally
-
-Use `--global` flag when adding modes:
-
-```bash
-# Add a mode to global (user-wide) storage
-unispec mode add /path/to/mymode --global
-
-# Remove a global mode
-unispec mode remove mymode --global
-```
-
-### Mode Search Order
-
-When you run `unispec mode list` or `unispec mode activate`, modes are searched:
-
+Mode search order:
 1. Local: `./.agent/modes/`
 2. Global: `~/.config/unispec/.agent/modes/`
 3. System: `/usr/share/unispec/.agent/modes/`
 
-The first match wins.
+First match wins.
 
 ---
 
-## Area Files
+## Area files
 
-Each area has an `area.md` file in `spec/<area>/area.md`.
-
-### Local Areas
-
-```
-spec/
-├── Staging/
-│   └── area.md
-├── Working/
-│   └── area.md
-└── Build/
-    └── area.md
-```
-
-### Global Area Templates
-
-```
-~/.config/unispec/
-└── .agent/
-    └── areas/
-        ├── staging/
-        │   └── area.md
-        ├── working/
-        │   └── area.md
-        └── custom/
-            └── area.md
-```
-
-When you create a new area with `unispec area add`, UniSpec checks:
-1. Local `.agent/areas/<name>/area.md`
-2. Global `.agent/areas/<name>/area.md`
-3. System `/usr/share/unispec/.agent/areas/<name>/area.md`
-
-### Format
+Each area has an `area.md` file in `spec/<area>/area.md`. Format:
 
 ```markdown
-# Area: <Area Name>
+---
+area: <AreaName>
+short: <one-line description>
+---
 
-Description of this area's purpose.
+# <AreaName>
 
-## Topics
+## Purpose
+<what this area represents>
 
-- Topic A
-- Topic B
-
-## Notes
-
-Additional notes about this area.
+## Guidelines
+- <what belongs here>
+- <what does not>
 ```
+
+Area templates are stored under `.agent/modes/<mode>/areas/<area>/area.md`. `unispec init` and `unispec area add` copy these into `spec/<area>/area.md` when creating areas.
 
 ---
 
-## MCP Configuration
+## Connector MCP configuration
 
-Generated automatically from connectors to `.agent/mcp.json`:
+`unispec connector mcp` generates a `mcpServers` block you can drop into an editor's settings:
 
 ```json
 {
   "mcpServers": {
     "unispec_test": {
       "command": "unispec",
-      "args": ["connector", "run", "test"],
-      "env": null
+      "args": ["connector", "run", "test"]
     }
   }
 }
 ```
 
----
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `UNISPEC_ROOT` | Override project root directory | Auto-detected |
-| `UNISPEC_CONFIG` | Custom config file path | `.agent/config.toml` |
-| `UNISPEC_MCP_PORT` | MCP server port | `3000` |
+Most users instead use a single `unispec mcp` server that exposes both the static UniSpec tools and the dynamic `unispec_<name>` connector tools. See [mcp.md](mcp.md) for the standard setup.
 
 ---
 
-## Exit Codes
+## Environment variables
 
-| Code | Description |
-|------|-------------|
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `UNISPEC_ROOT` | Override project root directory. | Auto-detected from current dir. |
+| `UNISPEC_MODE` | Override active mode for this session. | Value of `current_mode`. |
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
 | 0 | Success |
 | 1 | General error |
 | 2 | Invalid arguments |
 | 3 | Project not initialized |
-| 4 | Topic/area not found |
+| 4 | Topic or area not found |
 
 ---
 
-## See Also
+## See also
 
-- [Commands Reference](commands.md) - CLI command documentation
-- [Modes Documentation](modes.md) - Custom workflow configurations
-- [MCP Documentation](mcp.md) - AI agent integration
-- [Getting Started](getting-started.md) - Quick start guide
+- [Commands Reference](commands.md)
+- [Modes](modes.md)
+- [MCP Integration](mcp.md)
+- [Getting Started](getting-started.md)
