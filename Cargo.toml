@@ -1,6 +1,6 @@
 [package]
 name = "unispec"
-version = "0.0.7"
+version = "0.0.8"
 edition = "2021"
 description = "Open Source Spec-Driven Development CLI"
 readme = "README.md"
