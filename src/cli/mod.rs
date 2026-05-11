@@ -451,9 +451,10 @@ pub enum TopicCommands {
     },
     /// List topics in an area
     List {
-        /// Area to list topics from (default: Working)
-        #[arg(short = 'a', long, default_value = "Working")]
-        area: String,
+        /// Area to list topics from. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short = 'a', long)]
+        area: Option<String>,
         /// Show hierarchical view
         #[arg(short = 'H', long)]
         hierarchy: bool,
@@ -472,13 +473,19 @@ pub enum TopicCommands {
     Pull {
         /// Name of the topic to pull
         topic: String,
-        /// Source area to pull from
-        area: String,
+        /// Source area to pull from. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
     },
     /// Remove a topic
     Remove {
         /// Name of the topic to remove
         topic: String,
+        /// Area the topic lives in. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
         /// Force removal without confirmation
         #[arg(short, long)]
         force: bool,

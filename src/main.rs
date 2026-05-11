@@ -24,6 +24,17 @@ fn get_show_platypus() -> bool {
     crate::fs::config::get_paddy_enabled().unwrap_or(true)
 }
 
+/// Resolve a CLI-supplied area override to a concrete area name.
+/// Falls back to `.agent/config.toml`'s `area` field, then to "Staging".
+fn resolve_area_from_config(area: Option<String>) -> String {
+    area.unwrap_or_else(|| {
+        crate::fs::config::load_config()
+            .ok()
+            .map(|c| c.area)
+            .unwrap_or_else(|| "Staging".to_string())
+    })
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -202,18 +213,16 @@ fn main() -> Result<()> {
                 short,
                 content,
             } => {
-                let area = area.unwrap_or_else(|| {
-                    crate::fs::config::load_config()
-                        .ok()
-                        .map(|c| c.area)
-                        .unwrap_or_else(|| "Staging".to_string())
-                });
+                let area = resolve_area_from_config(area);
                 topic::run_new(&topic, &area, Some(&short), Some(&content))?;
                 if get_show_platypus() {
                     platypus::happy();
                 }
             }
-            TopicCommands::List { area, hierarchy: _ } => topic::run_list(&area, false)?,
+            TopicCommands::List { area, hierarchy: _ } => {
+                let area = resolve_area_from_config(area);
+                topic::run_list(&area, false)?
+            }
             TopicCommands::Push { topic, area, from } => {
                 topic::run_push(&topic, &area, from.as_deref())?;
                 if get_show_platypus() {
@@ -221,23 +230,29 @@ fn main() -> Result<()> {
                 }
             }
             TopicCommands::Pull { topic, area } => {
+                let area = resolve_area_from_config(area);
                 topic::run_pull(&topic, &area)?;
                 if get_show_platypus() {
                     platypus::working();
                 }
             }
-            TopicCommands::Remove { topic, force } => {
-                topic::run_delete(
-                    &topic,
-                    &crate::fs::config::load_config()?.area.as_str(),
-                    force,
-                )?;
+            TopicCommands::Remove { topic, area, force } => {
+                let area = resolve_area_from_config(area);
+                topic::run_delete(&topic, &area, force)?;
                 if get_show_platypus() {
                     platypus::sad();
                 }
             }
             TopicCommands::Show { topic, all, from } => {
-                topic::run_show(&topic, all, from.as_deref())?
+                // When neither --from nor --all is given, default to the
+                // configured area so `unispec topic show <name>` picks the
+                // expected one.
+                let resolved_from = if all {
+                    from
+                } else {
+                    Some(resolve_area_from_config(from))
+                };
+                topic::run_show(&topic, all, resolved_from.as_deref())?
             }
             TopicCommands::Progress { area } => topic::run_progress(area.as_deref())?,
             TopicCommands::Order { action } => match action {
