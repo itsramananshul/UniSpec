@@ -421,10 +421,13 @@ pub enum SpecCommands {
         #[arg(short, long)]
         short: String,
         /// Full spec body (matches the spec template). Required, ≥ 11 chars.
-        #[arg(long)]
+        /// `allow_hyphen_values` lets the value contain lines starting with `- `
+        /// (markdown bullets) without clap treating them as new flags.
+        #[arg(long, allow_hyphen_values = true)]
         spec_content: String,
         /// Full task body (matches the task template). Required, ≥ 11 chars.
-        #[arg(long)]
+        /// `allow_hyphen_values` lets the value contain markdown bullets.
+        #[arg(long, allow_hyphen_values = true)]
         task_content: String,
     },
 }
