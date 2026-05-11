@@ -1,198 +1,149 @@
-# Skill: UniSpec BUILD Workflow
+# BUILD Workflow
 
-## Purpose
-This workflow is for implementing specs into code. Use this when converting specifications into working code.
+Use this workflow to implement a topic — convert a spec in Staging into working code in `src/`, and hand it off to Testing.
 
-**IMPORTANT: All work starts in Staging. A topic must be listed in area's queue.md to be pushable.**
-
----
-
-## KEY RULE: Topics First, Always!
-
-**Before doing ANYTHING, you MUST research topics first!**
-
-1. **ALWAYS start by listing topics** - Never assume you know what's being built
-2. **ALWAYS read the topic first** - Understand the scope before building
-3. **Topics define scope** - Each topic bounds what specs are being implemented
+This file assumes the MCP tools listed in `docs/mcp.md` are available. Tool names are literal; arguments are objects.
 
 ---
 
-## READINESS SYSTEM - IMPORTANT!
+## Preconditions
 
-A topic is ONLY ready to push if it is listed in the area's `queue.md` file (e.g., `Staging/queue.md`).
+- The topic already has both files: `<topic>_spec.md` and `<topic>_task.md` (created via `spec_add`).
+- The topic is listed in `spec/Staging/queue.md` (or you'll add it below — `topics_push` from Staging requires this).
+- `src/` exists at the project root. If not, create it once at the start.
 
-**Why?**
-- Prevents pushing topics that aren't ready
-- Ensures all work is tracked in the central to-do list
-- Queue is deleted when moving from Working → Testing
-
-**How to verify:**
-```
-# Check if topic is in the area queue
-queue_check {topic: "<topic-name>", area: "Staging"}
-```
-
-If `ready: true`, you can push. If `ready: false`, add it first:
-```
-queue_add {topic: "<topic-name>", area: "Staging"}
-```
+If any precondition isn't met, fix it before running the steps below.
 
 ---
 
-## The BUILD Workflow
+## Steps
 
-### Step 0: Research Topics FIRST
-1. **List all topics in Staging:**
+### 1. Orient
+
+```
+topics_list   { area: "Staging" }
+queue_list    { area: "Staging" }
+```
+
+If the topic isn't in the queue:
+
+```
+queue_add    { topic: "<topic>", area: "Staging" }
+queue_check  { topic: "<topic>", area: "Staging" }
+```
+
+`queue_check` must return `ready: true` before you can push.
+
+### 2. Push to Working
+
+```
+topics_push { topic: "<topic>", area: "Working" }
+```
+
+This copies the topic into `spec/Working/<topic>/` and leaves the original in Staging.
+
+### 3. Load the spec and tasks
+
+```
+unispec_read_spec { topic: "<topic>", area: "Working" }
+tasks_list        { topic: "<topic>", area: "Working" }
+task_status       { topic: "<topic>", area: "Working", status: "working" }
+```
+
+Read both before writing code. The full task list comes back ordered, with each item's 0-based index, text, and checkbox state.
+
+### 4. Implement, one task at a time
+
+For each open task at `task_index = N`:
+
+1. Write code into `src/` at the project root. **Code never goes inside `spec/`.**
+2. After saving the file, link it:
    ```
-   topics_list {area: "Staging"}
+   index_add {
+     topic: "<topic>",
+     path: "src/<file>",
+     link_type: "implementation",
+     tags: "<comma-separated>",
+     annotation: "<one line: what this file contributes>"
+   }
    ```
-
-2. **Read the topic:**
+3. Mark the task complete:
    ```
-   topic_read {topic: "<topic-name>", area: "Staging"}
+   tasks_complete { topic: "<topic>", task_index: N }
    ```
-
-### Step 1: Check Readiness FIRST
-**Before pushing anything, check if the topic is in the area queue:**
-
-```
-queue_check {topic: "<topic-name>", area: "Staging"}
-```
-
-If not ready, add it:
-```
-queue_add {topic: "<topic-name>", area: "Staging"}
-```
-
-**This is REQUIRED - you cannot push a topic that's not in the queue!**
-
-### Step 2: Find queue.md in Staging
-**Look for the area queue.md file in Staging to know what to build:**
-```
-queue_list {area: "Staging"}
-```
-
-The queue.md is the CENTRAL TO-DO LIST in the AREA (e.g., `Staging/queue.md`). It contains ALL topics that need to be built.
-
-### Step 3: Create /src FIRST
-**Before writing any code, create /src at project root:**
-```
-# At project root (same level as spec/)
-# Create src/ directory - ALL code goes here
-```
-
-### Step 4: Push the Topic to Working
-**Push a topic that is listed in the queue:**
-```
-topics_push {topic: "<topic-name>", area: "Working"}
-```
-
-This pushes the topic. The queue.md stays in Staging.
-
-### Step 5: Read queue.md in Working
-```
-queue_list {area: "Working"}
-```
-
-### Step 6: Build Each Topic in Order
-For each topic in the queue:
-
-1. **Read spec and task files:**
+4. If a decision wasn't in the spec, capture it:
    ```
-   spec_read {topic: "<topic-name>", area: "Working"}
-   task_read {topic: "<topic-name>", area: "Working"}
+   notes_add { topic: "<topic>", note: "<decision + reason>" }
    ```
 
-2. **Create code in /src** (NOT in topic directories)
+Do these four steps for every task before moving on. Do not batch them across tasks — `tasks_complete` is cheap, and stale checkboxes lose information.
 
-3. **Link every file:**
-   ```
-   index_add {topic: "<topic-name>", path: "src/filename.rs", link_type: "implementation", tags: "..."}
-   ```
+### 5. Add test tasks (BUILD phase only)
 
-4. **CHECK OFF TASKS IMMEDIATELY - THIS IS REQUIRED!**
-   After completing each task, mark it complete:
-   ```
-   task_write {topic: "<topic-name>", area: "Working", content: "..."}
-   ```
-   Change `- [ ]` to `- [x]` for completed tasks.
+Implementation tasks belong in the spec. **Test tasks belong here, after implementation is finished.** Append them to the task file:
 
-   **NEVER skip this step! Always check off completed tasks before moving to the next one.**
-
-### Step 7: Add Testing Tasks Before Pushing to Testing
-**Testing tasks are ONLY created here - AFTER all implementation is done:**
 ```
-task_read {topic: "<topic-name>", area: "Working"}
+task_write {
+  topic: "<topic>",
+  area: "Working",
+  content: "<full task file content including the original Implementation phases plus a new ### Phase 5: Testing section with each test as `- [ ]`>"
+}
 ```
 
-Add testing tasks at the end of task.md:
-```
-## Testing (added before moving to Testing)
+`task_write` overwrites the whole file, so include the existing implementation phases in your `content`. (Use `read_asset { topic: "<topic>", asset_type: "task", area: "Working" }` first to get the current content.)
 
-- [ ] **T1** [Test the implementation]
-- [ ] **T2** [Verify it works as expected]
+### 6. Mark the topic complete and push to Testing
+
+```
+task_status  { topic: "<topic>", area: "Working", status: "complete" }
+topics_push  { topic: "<topic>", area: "Testing" }
 ```
 
-**This is the ONLY place for testing tasks - they are added AFTER development is complete, right before moving to Testing.**
-
-### Step 8: Push to Testing
-When done with testing tasks added, push to Testing - queue.md is automatically deleted:
-```
-topics_push {topic: "<topic-name>", area: "Testing"}
-```
+The mode config deletes `queue.md` when entering Testing — that's intentional.
 
 ---
 
-## Key Rules
+## File placement
 
-0. **CREATE /src FIRST** - Before any code
+```
+<project-root>/
+├── src/                    # all source code lives here
+└── spec/
+    ├── Staging/
+    │   ├── queue.md
+    │   └── <topic>/
+    │       ├── topic.md
+    │       ├── <topic>_spec.md
+    │       └── <topic>_task.md
+    └── Working/
+        └── <topic>/
+            ├── topic.md
+            ├── <topic>_spec.md
+            └── <topic>_task.md
+```
 
-1. **MUST be in queue** - Topic must be listed in area queue.md to be pushable
-
-2. **ALL code in /src** - At project root, never in topic directories
-
-3. **Link every file** - Use index_add
-
-4. **CHECK OFF TASKS RELIGIOUSLY** - After completing each task, mark it complete with `- [x]`. NEVER skip this!
-
-5. **Add testing tasks last** - Before pushing to Testing, add test tasks
-
-6. **Queue deleted at Testing** - Normal behavior
+For nested topics (`auth/login`), the spec/task filenames become `auth-login_spec.md` and `auth-login_task.md` inside `spec/<Area>/auth/login/`.
 
 ---
 
-## Queue File Location
+## Definition of done
 
-**The queue.md is in the AREA, not in topic folders:**
-```
-spec/
-├── Staging/
-│   └── queue.md    ← Central to-do list for Staging
-├── Working/
-│   └── queue.md    ← Central to-do list for Working
-└── ...
-```
+A topic is done with BUILD when **all** of these hold:
+
+- Every implementation task in `<topic>_task.md` is `- [x]`.
+- Every source file you wrote or substantively changed has a matching `index_add` link with `link_type: "implementation"`.
+- Decisions not in the spec are captured via `notes_add`.
+- Test tasks have been appended to the task file.
+- `task_status` is `complete`.
+- `topics_push { area: "Testing" }` succeeded.
+
+If any item above is missing, the topic is not ready for Testing.
 
 ---
 
-## Example
+## Failure modes
 
-```
-# Check if topic is in queue
-queue_check {topic: "auth", area: "Staging"}
-# If not ready, add it:
-queue_add {topic: "auth", area: "Staging"}
-
-# List what's in the queue
-queue_list {area: "Staging"}
-
-# Push to Working
-topics_push {topic: "auth", area: "Working"}
-
-# Build in Working
-# ... create files in /src ...
-# ... check off tasks ...
-
-# Add testing tasks, then push to Testing
-topics_push {topic: "auth", area: "Testing"}
-```
+- **`topics_push` rejects you in Staging** — topic isn't in `Staging/queue.md`. Run `queue_add`, then `queue_check`.
+- **`task_write` rejects you** — the spec file doesn't exist yet. The topic isn't fully created; run `spec_add` first.
+- **`tasks_complete` says "task at index N not found"** — the index is out of range. Run `tasks_list` again to see the current indices; they're recalculated each call.
+- **You wrote a file outside `src/`** — that's a smell. Either move it into `src/`, or skip `index_add` and add a project-level note via `notes_add` explaining why.

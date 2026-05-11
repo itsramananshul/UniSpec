@@ -1,154 +1,107 @@
 ---
-description: Archive a completed change in the experimental workflow
+description: Archive a completed topic — move it to the Build area
 ---
 
-Archive a completed change in the experimental workflow.
+# /opsx:archive
 
-**Input**: Optionally specify a change name after `/opsx:archive` (e.g., `/opsx:archive add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+> **Scope note.** This is an OpenSpec-style "archive a completed change" prompt mapped onto UniSpec. There is **no** `openspec` CLI — wherever OpenSpec workflows say "archive", in UniSpec this means moving the topic to the `Build` area, which is treated as immutable.
 
-**Steps**
+Archive a completed topic by promoting it to `Build`. UniSpec does not delete or rename topics on archive; instead, `Build` is the immutable final stage of the pipeline.
 
-1. **If no change name provided, prompt for selection**
+## Input
 
-   Run `openspec list --json` to get available changes. Use the **AskUserQuestion tool** to let the user select.
+The argument after `/opsx:archive` is the topic name. If omitted, list candidates from `Testing` (since archive should only follow successful tests) and ask the user to pick:
+```
+topics_list { area: "Testing" }
+```
+Never auto-select among multiple candidates.
 
-   Show only active changes (not already archived).
-   Include the schema used for each change if available.
+## Tools
 
-   **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
+MCP:
+- `topics_list { area }`
+- `topics_show { topic, area }`
+- `unispec_read_spec { topic, area }`
+- `tasks_list { topic, area }`
+- `notes_add { topic, note }`
+- `task_status { topic, area, status }`
+- `topics_push { topic, area }`
 
-2. **Check artifact completion status**
+## Steps
 
-   Run `openspec status --change "<name>" --json` to check artifact completion.
+### 1. Confirm the topic
+Ask the user (or accept the argument). Announce: "Archiving topic: <name>".
 
-   Parse the JSON to understand:
-   - `schemaName`: The workflow being used
-   - `artifacts`: List of artifacts with their status (`done` or other)
+### 2. Check completeness
 
-   **If any artifacts are not `done`:**
-   - Display warning listing incomplete artifacts
-   - Prompt user for confirmation to continue
-   - Proceed if user confirms
-
-3. **Check task completion status**
-
-   Read the tasks file (typically `tasks.md`) to check for incomplete tasks.
-
-   Count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
-
-   **If incomplete tasks found:**
-   - Display warning showing count of incomplete tasks
-   - Prompt user for confirmation to continue
-   - Proceed if user confirms
-
-   **If no tasks file exists:** Proceed without task-related warning.
-
-4. **Assess delta spec sync state**
-
-   Check for delta specs at `openspec/changes/<name>/specs/`. If none exist, proceed without sync prompt.
-
-   **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at `openspec/specs/<capability>/spec.md`
-   - Determine what changes would be applied (adds, modifications, removals, renames)
-   - Show a combined summary before prompting
-
-   **Prompt options:**
-   - If changes needed: "Sync now (recommended)", "Archive without syncing"
-   - If already synced: "Archive now", "Sync anyway", "Cancel"
-
-   If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Proceed to archive regardless of choice.
-
-5. **Perform the archive**
-
-   Create the archive directory if it doesn't exist:
-   ```bash
-   mkdir -p openspec/changes/archive
+a. **Spec + tasks present:**
    ```
-
-   Generate target name using current date: `YYYY-MM-DD-<change-name>`
-
-   **Check if target already exists:**
-   - If yes: Fail with error, suggest renaming existing archive or using different date
-   - If no: Move the change directory to archive
-
-   ```bash
-   mv openspec/changes/<name> openspec/changes/archive/YYYY-MM-DD-<name>
+   topics_show { topic: "<name>", area: "Testing" }
    ```
+   Must list `topic.md`, `<name>_spec.md`, `<name>_task.md`.
 
-6. **Display summary**
+b. **All tasks complete:**
+   ```
+   tasks_list { topic: "<name>", area: "Testing" }
+   ```
+   Count `- [ ]` (incomplete) vs `- [x]` (complete). **If any are incomplete**, show the count and prompt:
+   ```
+   <N> incomplete tasks remain. Archive anyway?
+   ```
+   Proceed only on explicit user confirmation.
 
-   Show archive completion summary including:
-   - Change name
-   - Schema that was used
-   - Archive location
-   - Spec sync status (synced / sync skipped / no delta specs)
-   - Note about any warnings (incomplete artifacts/tasks)
+c. **Test run captured:** Inspect the notes block of `<name>_task.md` for a recent `Test run` or `Verification` entry. If missing, warn and prompt for confirmation.
 
-**Output On Success**
-
+### 3. Promote to Build
 ```
-## Archive Complete
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** ✓ Synced to main specs
-
-All artifacts complete. All tasks complete.
+task_status { topic: "<name>", area: "Testing", status: "complete" }
+topics_push { topic: "<name>", area: "Build" }
 ```
+`Build` is configured as a protected area in `.agent/modes/default/mode.toml`. After this push, you should not modify the topic in `Build`. To make further changes, run `topics_pull { topic, source_area: "Build" }` to bring it back into `Working`.
 
-**Output On Success (No Delta Specs)**
-
+### 4. Record the archive
 ```
-## Archive Complete
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** No delta specs
-
-All artifacts complete. All tasks complete.
+notes_add {
+  topic: "<name>",
+  note: "Archived to Build on YYYY-MM-DD.\n  Test run: <link or summary>\n  Verification: <link or summary>"
+}
 ```
 
-**Output On Success With Warnings**
+### 5. Summarize
 
 ```
-## Archive Complete (with warnings)
+## Archived: <name>
 
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** Sync skipped (user chose to skip)
+Pipeline: Staging → Working → Testing → Build
+Final files:
+- spec/Build/<name>/topic.md
+- spec/Build/<name>/<name>_spec.md
+- spec/Build/<name>/<name>_task.md
 
-**Warnings:**
-- Archived with 2 incomplete artifacts
-- Archived with 3 incomplete tasks
-- Delta spec sync was skipped (user chose to skip)
-
-Review the archive if this was not intentional.
+Build is treated as immutable. To resume work, run topics_pull { topic: "<name>", source_area: "Build" }.
 ```
 
-**Output On Error (Archive Exists)**
+## Definition of done
+
+- The topic exists under `spec/Build/<name>/` with all three files.
+- `task_status` is `complete`.
+- A `notes_add` entry records the archive date and references the verification result.
+- If incomplete tasks or missing verification were waived, the user explicitly confirmed.
+
+## Output on warnings
 
 ```
-## Archive Failed
+## Archived (with warnings): <name>
 
-**Change:** <change-name>
-**Target:** openspec/changes/archive/YYYY-MM-DD-<name>/
+Warnings:
+- <N> incomplete tasks at archive time (user confirmed).
+- Verification block not found in notes (user confirmed).
 
-Target archive directory already exists.
-
-**Options:**
-1. Rename the existing archive
-2. Delete the existing archive if it's a duplicate
-3. Wait until a different date to archive
+Review spec/Build/<name>/<name>_task.md if this wasn't intentional.
 ```
 
-**Guardrails**
-- Always prompt for change selection if not provided
-- Use artifact graph (openspec status --json) for completion checking
-- Don't block archive on warnings - just inform and confirm
-- Preserve .openspec.yaml when moving to archive (it moves with the directory)
-- Show clear summary of what happened
-- If sync is requested, use the Skill tool to invoke `openspec-sync-specs` (agent-driven)
-- If delta specs exist, always run the sync assessment and show the combined summary before prompting
+## Guardrails
+
+- Don't auto-archive. Always confirm with the user, especially with warnings.
+- Don't bypass the `topics_push` flow with raw filesystem moves — that breaks the index.
+- Once in `Build`, treat the topic as read-only. Pull it back into `Working` if changes are needed.

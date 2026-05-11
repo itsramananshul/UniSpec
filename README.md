@@ -71,13 +71,15 @@ unispec
 
 ## Core Concepts 🔥
 
-### Areas (Simple Mode)
+### Areas (Default Mode)
 
 | Area | Purpose |
 |------|---------|
 | **Staging** | Writing specs |
-| **Building** | Writing code |
-| **Ship** | Done. Ready to deploy. |
+| **Working** | Writing code |
+| **Testing** | Running build & test pipelines |
+| **Fixing** | Repairing issues from Testing |
+| **Build** | Done. Treated as immutable. |
 
 ### Indexing (The Secret Sauce)
 
@@ -91,10 +93,7 @@ unispec index add --topic "user-login" --path tests/login_test.py
 
 ### Modes
 
-Custom workflows for different teams:
-- `.agent/modes/simple/` - Default (spec → build → ship)
-- `.agent/modes/complex/`- Advanced workflows
-- `.agent/modes/ingest/` - Create specs from code
+Custom workflows for different teams. The default mode ships at `.agent/modes/default/` and uses the five-area pipeline above. Additional modes (sprint, kanban, RFC, docs) can be installed from the community package repository or built by hand — see [docs/modes.md](docs/modes.md).
 
 ---
 

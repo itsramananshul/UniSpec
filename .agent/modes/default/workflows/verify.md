@@ -1,27 +1,87 @@
-# Workflow: /verify
+# Workflow: /verify (default mode)
 
-## Purpose
-Verify the alignment between the specification and the implementation. This workflow can be triggered at any stage to ensure quality and consistency.
+Confirm that the implementation in `src/` satisfies every requirement in the spec. With `--fix`, repair gaps and return to Testing.
 
-## Process
-1. **Context Loading**:
-   - Use `unispec_read_spec` to load `spec.md` and `task.md` for the current topic.
-   - Use `unispec_nav` to identify bound files.
+Mirrors `.agent/workflows/verify.md`; per-mode copy.
 
-2. **Alignment Check**:
-   - Execute `unispec_auto_verify` with the topic name.
-   - Analyze the output for mismatches between requirements and implementation.
+---
 
-3. **Relationship Check**:
-   - Use `unispec_query_relations` for key functions to ensure no regressions were introduced in dependent modules.
+## Tools
 
-4. **Fixing (If --fix tag is present)**:
-   - If issues are found, move the topic to the `Fixing` area.
-   - Analyze failure logs or alignment issues.
-   - Apply fixes to the code using `file_write`.
-   - Update `task.md` notes using `unispec_update_task` with the fix details.
-   - Return to `Testing` area.
+MCP:
+- `unispec_read_spec { topic, area }`
+- `read_asset { topic, asset_type: "spec", area }`
+- `index_list { topic }`
+- `index_find { query, by }` — `by ∈ {"topic","path","tag"}`
+- `index_backlinks { topic }`
+- `notes_add { topic, note }`
+- `topics_push { topic, area }`
+- `task_status { topic, area, status }`
 
-5. **Reporting**:
-   - Update `topic.md` with the verification status (aligned/misaligned).
-   - If misaligned, list specific issues in the `Verification Summary` section.
+CLI:
+- `unispec auto verify <topic>` — runs the configured verifier.
+
+There is no MCP tool named `unispec_auto_verify`, `unispec_query_relations`, `unispec_update_task`, or `unispec_nav`. Use the tools listed above.
+
+---
+
+## Steps
+
+1. **Load context.**
+   ```
+   unispec_read_spec { topic: "<topic>", area: "<Testing or Working>" }
+   index_list        { topic: "<topic>" }
+   ```
+
+2. **Trace each requirement.** For every `REQ-*` in the spec:
+   - Find the linked file(s) from `index_list` (filter `link_type: "implementation"`).
+   - Read the file(s) with the host editor's Read tool.
+   - Record state: `✓ implemented`, `⚠ partial`, or `✗ missing`. Always cite `<file>:<line>`.
+
+3. **Run the verifier (optional).**
+   ```bash
+   unispec auto verify <topic>
+   ```
+   Combine its output with your manual trace.
+
+4. **Scope regressions.**
+   ```
+   index_backlinks { topic: "<topic>" }
+   ```
+   For each dependent topic, re-check its critical paths.
+
+5. **Report.**
+   ```
+   notes_add {
+     topic: "<topic>",
+     note: "Verification YYYY-MM-DD: <N>/<M> requirements implemented.\n- REQ-001 ✓ src/auth/login.rs:42\n- REQ-002 ✗ not found\n- REQ-003 ⚠ partial — src/auth/login.rs:88 (locks after 10 failures, spec says 5)"
+   }
+   ```
+
+6. **With `--fix`, if gaps exist:**
+   ```
+   topics_push { topic: "<topic>", area: "Fixing" }
+   task_status { topic: "<topic>", area: "Fixing", status: "working" }
+   ```
+   Fix in `src/`, flip checkboxes (`tasks_complete`), record decisions (`notes_add`), then:
+   ```
+   topics_push { topic: "<topic>", area: "Testing" }
+   task_status { topic: "<topic>", area: "Testing", status: "complete" }
+   ```
+
+---
+
+## Definition of done
+
+- Every `REQ-*` in the spec has a recorded state (`✓` / `⚠` / `✗`) with `<file>:<line>` evidence.
+- The verification block is appended via `notes_add`.
+- With `--fix`: gaps closed, topic back in `Testing`, `task_status` is `complete`.
+- Without `--fix`: gaps reported by `REQ-*` ID; the topic stays where it is.
+
+---
+
+## Failure modes
+
+- **`unispec_read_spec` returns empty content** — wrong area, or files were renamed manually. Run `topics_show { topic, show_all: true }` to locate them.
+- **`index_list` returns nothing** — code exists but was never linked. Catch up with `index_add` and report the gap as a BUILD-process failure.
+- **Verifier exits non-zero with no per-REQ mapping** — don't auto-push to Fixing. Ask the user how to interpret the failure.

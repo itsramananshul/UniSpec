@@ -1,94 +1,109 @@
 # Workflow: /spec
 
-**YOUR ONLY JOB: Create specs and tasks using the templates. Don't write code.**
+Create or refine a topic, spec, and task list in `Staging`. No code is written here.
+
+This workflow uses the UniSpec MCP tools. Tool names are literal; arguments are JSON objects.
 
 ---
 
-## 🔴 STRICT RULE: READ TEMPLATES FIRST!
+## Tools
 
-**Before creating any topic, spec, or task, you MUST read the template files first.**
-
-The templates are located in:
-- `.agent/modes/default/templates/topic.md`
-- `.agent/modes/default/templates/spec.md`
-- `.agent/modes/default/templates/task.md`
-- `.agent/modes/default/templates/area.md`
-
-Use `read_asset` to read these templates, then fill them in with actual content.
+| Tool | Required args | Purpose |
+|------|---------------|---------|
+| `read_asset` | `topic, asset_type` | Read templates (`topic: "templates"`) or existing topic/spec/task. `asset_type ∈ {"topic","spec","task"}`. |
+| `topics_add` | `topic, area, short, content` | Create `topic.md`. `content` ≥ 10 chars. Server writes frontmatter — don't include `---`. |
+| `spec_add` | `topic, area, short, spec_content, task_content` | Create `<topic>_spec.md` and `<topic>_task.md`. Both content fields ≥ 10 chars. Server strips your frontmatter and writes its own. |
+| `queue_add` | `topic, area` | Add the topic to `spec/<area>/queue.md` so BUILD can later push it. |
+| `topics_show` | `topic, area` | Verify files exist after creation. |
 
 ---
 
-## HOW TO USE THE TOOLS
+## Steps
 
-### Step 1: Read the Topic Template
-
+### 1. Read templates first
 ```
-read_asset {
-  topic: "templates",
-  asset_type: "topic",
-  area: "default"
-}
+read_asset { topic: "templates", asset_type: "topic" }
+read_asset { topic: "templates", asset_type: "spec" }
+read_asset { topic: "templates", asset_type: "task" }
 ```
+Mirror the section headings exactly. Fill the body with project-specific content — never commit `[placeholder]` text.
 
-Then create a topic using topics_add with the template structure:
-
+### 2. Create the topic
 ```
 topics_add {
-  topic: "myproject",
+  topic: "<topic-name>",
   area: "Staging",
-  short: "A web application for managing tasks and projects",
-  content: "[Use the topic template structure - fill in ALL sections with real content]"
+  short: "<one-line description>",
+  content: "<body matching templates/topic.md, with real content in each section>"
 }
 ```
 
-**IMPORTANT**: 
-- `content` parameter is REQUIRED and must have at least 20 characters of actual content
-- `short` parameter is REQUIRED for TUI display
-- The MCP tool will auto-add frontmatter - just provide the body content
+Constraints: `short` non-empty, `content` ≥ 10 chars, no leading `---` block (server writes its own frontmatter).
 
----
-
-### Step 2: Read the Spec and Task Templates
-
-```
-read_asset {
-  topic: "templates",
-  asset_type: "spec",
-  area: "default"
-}
-```
-
-Then create a spec + tasks using spec_add:
-
+### 3. Create the spec and task files
 ```
 spec_add {
-  topic: "myproject/auth",
+  topic: "<topic-name>",
   area: "Staging",
-  short: "User authentication with JWT tokens",
-  spec_content: "[Use the spec template structure - fill in ALL sections with real content]",
-  task_content: "[Use the task template structure - fill in ALL sections with real content]"
+  short: "<one-line description>",
+  spec_content: "<body matching templates/spec.md, sections filled>",
+  task_content: "<body matching templates/task.md, implementation tasks only>"
 }
 ```
 
+Filenames produced (slashes/spaces in `topic` become `-`):
+- `<topic>_spec.md`
+- `<topic>_task.md`
+
+### 4. Register in the queue
+```
+queue_add { topic: "<topic-name>", area: "Staging" }
+```
+
+### 5. Verify
+```
+topics_show { topic: "<topic-name>", area: "Staging" }
+```
+Must list `topic.md`, `<topic>_spec.md`, `<topic>_task.md`.
+
 ---
 
-## KEY POINTS
+## Content rules
 
-1. **Read templates first** - Don't guess the structure, read the template files
-2. **Follow template exactly** - Don't change the structure
-3. **Fill in all placeholders** - Write actual content in each section
-4. **No testing tasks** - The task template only has 4 phases (Foundation, Core Features, Integration, Polish)
-5. **Use MCP tools** - topics_add and spec_add will auto-add frontmatter including `short`
-6. **ALWAYS include `short` parameter** - This is required for the TUI display!
-7. **Use `spec_content`** - Use `spec_content` NOT `content` for spec_add!
-8. **content is REQUIRED** - topics_add requires meaningful content (20+ characters)
+- **Spec = WHAT, not HOW.** Use SHALL/SHOULD; acceptance criteria are checkable.
+- **Tasks = implementation steps only.** No test tasks here — those are added during BUILD.
+- **One topic = one bounded scope.** If you list five unrelated capabilities, split into sub-topics (`feature/sub-a`, `feature/sub-b`). The parent topic must already exist before adding a sub-topic.
+- **No placeholder strings in the body.** `[Requirement statement]`, `[Foundation task]`, etc. exist in templates to be replaced.
 
 ---
 
-## ASK IF UNSURE
+## Definition of done
 
-If you don't know what to write, ASK the user:
-- "What should this feature do?"
-- "What are the must-have requirements?"
-- "What does success look like?"
-- "What's a one-line description for this?"
+- `spec/Staging/<topic>/topic.md` exists with a real Overview.
+- `spec/Staging/<topic>/<topic>_spec.md` exists with every template section filled with real content.
+- `spec/Staging/<topic>/<topic>_task.md` exists with at least one concrete implementation task and zero test tasks.
+- `queue_check { topic, area: "Staging" }` returns `ready: true`.
+
+If any condition fails, the topic is not ready for `/build`.
+
+---
+
+## Failure modes
+
+- **`topics_add` errors with "content too short"** — `content` is under 10 chars or empty. Write a real body.
+- **`spec_add` errors with "spec_content required"** — you passed `content` instead. The parameter name is `spec_content` (not `content`) for `spec_add`.
+- **`spec_add` errors on nested topic** — the parent topic doesn't exist. Run `topics_add` for the parent first (e.g. `topics_add { topic: "auth", ... }` before `spec_add { topic: "auth/login", ... }`).
+
+---
+
+## Asking the user
+
+If you don't know any of these, ask before writing anything:
+
+- One-line description (`short`)
+- What problem does this solve, and for whom?
+- What are the must-have requirements (REQ-001, REQ-002, …)?
+- What is explicitly out of scope?
+- What's a checkable acceptance criterion?
+
+A vague answer means you ask again. Do not guess and commit.

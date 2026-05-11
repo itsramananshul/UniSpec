@@ -652,14 +652,20 @@ unispec mcp /path/to/project
 
 ### MCP Tools Available
 
-When the MCP server is running, the following tools are available:
+When the MCP server is running, it exposes 31 built-in tools plus one dynamic `unispec_<name>` tool per configured connector. See [MCP Documentation](mcp.md) for the full schema of each tool.
 
-- `unispec_topic_list` - List topics in an area
-- `unispec_topic_show` - Show topic details
-- `unispec_area_list` - List all areas
-- `unispec_area_health` - Show area health
-- `unispec_index_find` - Find files linked to a topic
-- `unispec_connector_*` - Run custom connectors
+Tools the server publishes (real names, used verbatim by agents):
+
+- Areas: `areas_list`
+- Topics: `topics_list`, `topics_add`, `topics_show`, `topics_delete`, `topics_push`, `topics_pull`, `topics_progress`
+- Reading: `read_asset`, `unispec_read_spec`
+- Specs & tasks: `spec_add`, `spec_write`, `task_write`, `task_status`, `tasks_list`, `tasks_complete`, `tasks_incomplete`
+- Notes: `notes_read`, `notes_add`
+- Queue: `queue_list`, `queue_add`, `queue_remove`, `queue_check`, `queue_reorder`
+- Index: `index_add`, `index_find`, `index_lookup`, `index_list`, `index_graph`, `index_backlinks`, `unispec_bind_spec`
+- Dynamic: `unispec_<connector-name>` for each connector defined in `.agent/config.toml`
+
+CLI commands like `unispec area add`, `unispec index remove`, `unispec mode activate`, `unispec connector new`, `unispec pkg install` are **not** exposed via MCP — they're considered setup/config commands. Run them from the shell.
 
 ---
 

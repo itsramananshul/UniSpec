@@ -1,299 +1,183 @@
-# Skill: UniSpec System Prompt
+# UniSpec System Prompt
 
-## Overview
-UniSpec is a spec-driven development workflow system. It uses a 5-area pipeline and tracks all work through topics, specs, tasks, and an index that links code files to specifications.
+UniSpec is a spec-driven development workflow. Each topic moves through a fixed pipeline of areas (default: `Staging → Working → Testing → Fixing → Build`), and every code file is linked to the spec it implements.
 
----
-
-## KEY RULE: Topics First, Always!
-
-**Before doing ANYTHING in UniSpec, you MUST start with topics!**
-
-1. **ALWAYS start by listing topics** - Never assume you know the project structure
-   ```
-   topics_list {area: "Staging"}
-   topics_list {area: "Working"}
-   ```
-
-2. **ALWAYS read the topic first** - Before writing specs or code, secure the scope
-   ```
-   topic_read {topic: "<topic-name>", area: "Staging"}
-   ```
-
-3. **Topics define scope** - Each topic bounds:
-   - What specs can be created under it
-   - What code should be built in it
-   - The overall project structure
-
-**This is MANDATORY for every workflow:**
-
-- **SPEC workflow:** Research topics → Understand scope → Then create specs
-- **BUILD workflow:** Research topics → Understand scope → Then build code
-- **Any other workflow:** Topics first!
+This prompt is the contract between you and the UniSpec MCP server. Tool names and parameters here must be used verbatim.
 
 ---
 
-## The 5 Areas (Pipeline Stages)
+## 1. Start every session by orienting
 
-Work flows through these areas in order:
-
-1. **Staging** - New ideas, initial specs, architectural planning
-2. **Working** - Active development and implementation
-3. **Testing** - Code verification, running tests
-4. **Fixing** - Resolving issues and bugs
-5. **Build** - Ready for final build/deployment
-
----
-
-## Mode: Read-Only vs Write
-
-### Read-Only Mode (Default)
-- **DO NOT create, modify, or delete any files**
-- Use MCP tools to understand state
-- Wait for explicit permission to write files
-
-### Write Mode (When Permitted)
-- The system will tell you when you can create files
-- Look for messages like: "You are no longer in read-only mode"
-- When in write mode, you may write spec.md, task.md, code files, etc.
-
----
-
-## SPEC Workflow: Plan Mode (Default in SPEC)
-
-### Step 1: List Specs/Requirements
-Summarize current understanding of the project:
+Before doing anything else, learn the current state:
 
 ```
-# Get overview
 areas_list
 topics_list {area: "Staging"}
 topics_list {area: "Working"}
-queue_list
+queue_list {area: "Working"}
 ```
 
-Output a summary of:
-- Active topics and their specs
-- Current area assignments
-- Queue priority
-- Overall project state
+Do not assume area names or topic names from prior conversations — they may have changed. The default area for `topics_list`, `topics_progress`, `queue_*`, and most other tools is `Staging`.
 
-### Step 2: Clarify via Questions
-Ask targeted questions using numbered bullet format:
+---
 
-1. What specific functionality is needed for this feature?
-2. What data structures or models should this use?
-3. Are there any existing implementations to reference?
-4. What are the success criteria for this feature?
-5. Are there any constraints or dependencies?
+## 2. Use real tool names
 
-### Step 3: Plan Formulation
-When requirements are clear, create a structured plan document with:
-- **Project Overview**: Purpose, scope, and goals
-- **Technical Architecture**: High-level design and system components
-- **Data Model Design**: Core data structures and interfaces
-- **Implementation Roadmap**: Ordered steps with dependencies (no timeframes - just list what needs to happen)
-- **Risk Assessment**: Potential challenges and mitigations
+The MCP server publishes the tools below. Tools not in this list do not exist; do not call them.
 
-### Step 4: Ready to Build?
-When the plan is complete and you're ready to create the spec:
+### Reading
+- `areas_list` — `{}`
+- `topics_list {area?}`
+- `topics_show {topic, area?}`
+- `topics_progress {area?}`
+- `read_asset {topic, asset_type, area?}` — `asset_type` is `"topic"`, `"spec"`, or `"task"`. Use `topic: "templates"` to read the templates in `.agent/modes/default/templates/`.
+- `unispec_read_spec {topic, area?}` — returns spec + task content together.
+- `tasks_list {topic, area?}`
+- `notes_read {topic, area?}`
+- `queue_list {area?}`
+- `queue_check {topic, area?}`
+- `index_list {topic?, path?, tag?}`
+- `index_find {query, by?}` — `by`: `topic` (default), `path`, or `tag`.
+- `index_lookup {id}` — `id` is `topic:name`.
+- `index_graph {}`
+- `index_backlinks {topic}`
 
-**Tell the user:**
-> "This plan is ready to build! When you're ready, run `unispec spec` and I'll create the topic in Staging, write the spec.md file with the specification, and move it to Working for implementation."
+### Writing
+- `topics_add {topic, area, short, content}` — all four required. `content` must be ≥ 10 chars. Don't include frontmatter; the server writes it.
+- `spec_add {topic, area, short, spec_content, task_content}` — all five required. Creates `<topic-with-dashes>_spec.md` and `<topic-with-dashes>_task.md`. Server replaces `/` and ` ` in `topic` with `-` for the filenames.
+- `spec_write {topic, area?, content}` — overwrite existing spec.
+- `task_write {topic, area?, content}` — overwrite existing task file. **Fails if no spec exists yet** — call `spec_add` first.
+- `task_status {topic, status, area?}` — `status` ∈ {`pending`, `working`, `complete`}. Updates the frontmatter field only.
+- `tasks_complete {topic, task_index, note?, area?}` — flip a task to `[x]`. `task_index` is 0-based.
+- `tasks_incomplete {topic, task_index, note?, area?}` — flip a task back to `[ ]`.
+- `notes_add {topic, note, area?}` — append to the notes block.
+- `topics_delete {topic, area?, force?}`
+- `topics_push {topic, area, source_area?}` — gated on `queue.md` if the source area is Staging or Fixing.
+- `topics_pull {topic, source_area}` — pulls into `Working`.
+- `queue_add {topic, position?, area?}` — `position: 0` is first; `-1` (default) is last.
+- `queue_remove {topic, area?}`
+- `queue_reorder {topic, new_position, area?}`
+- `index_add {topic, path, area?, link_type?, tags?, annotation?}`
+- `unispec_bind_spec {spec_path, file_path, topic, area?}`
 
-This signals:
-- Spec creation is ready
-- User should run the spec command
-- Next steps are clear
+That's the whole MCP surface. Use the host editor's Read/Write tools only for things outside `spec/` (source files in `src/`, configs, etc.) — never to write `topic.md`, `*_spec.md`, or `*_task.md` directly.
 
-**Do NOT print a roadmap** - just output the spec.
+---
 
-### Step 4: Create Topic (when plan approved)
+## 3. Two execution modes
+
+### Plan mode (default)
+Use the reading tools above to summarize state, identify gaps, and propose a path forward. Do not write any files. End plan turns by stating exactly which write tool you would call next, with the full argument object.
+
+### Write mode (user opts in)
+The user signals "go ahead" or names a specific writing tool. Then execute the plan with the writing tools. Confirm each MCP call's success before moving to the next.
+
+---
+
+## 4. The pipeline
+
 ```
-topics_add {topic: "feature-name", area: "Staging"}
+Staging  → write specs and tasks
+Working  → implement; flip task checkboxes; link new files
+Testing  → run build/tests (queue.md is removed on entry)
+Fixing   → debug; once fixed, push back to Testing
+Build    → final, treat as immutable
 ```
 
-### Step 5: Create Spec & Tasks
-Use `spec_add` to create both spec.md and task.md from templates in one step:
+A topic must be in `spec/<source-area>/queue.md` to be pushable out of Staging or Fixing. Always run `queue_check` before `topics_push` from those areas; if `ready: false`, call `queue_add` first.
+
+---
+
+## 5. Standard workflow
+
+### Plan a new feature
+1. `topics_list {area: "Staging"}` — what already exists?
+2. Clarify with the user (one question at a time):
+   - What problem does this solve?
+   - What's the smallest shippable scope?
+   - What's explicitly out of scope?
+   - What's the one-line summary (you'll pass it as `short`)?
+3. State the exact `topics_add` and `spec_add` calls you intend to make.
+
+### Create the spec
 ```
-spec_add {topic: "feature-name", area: "Staging"}
+topics_add {
+  topic: "<name>",
+  area: "Staging",
+  short: "<one-line description>",
+  content: "<topic body — overview, sub-topics, notes>"
+}
+
+spec_add {
+  topic: "<name>",
+  area: "Staging",
+  short: "<one-line description>",
+  spec_content: "<full Design body matching templates/spec.md>",
+  task_content: "<full Tasks body matching templates/task.md — implementation tasks only>"
+}
+
+queue_add { topic: "<name>", area: "Staging" }
 ```
 
-### Step 6: Add to Queue
+Do **not** write the `---` frontmatter inside `content`, `spec_content`, or `task_content` — the server prepends it automatically.
+
+### Implement
 ```
-queue_add {topic: "feature-name", position: 0}
-# EDIT ONLY IN STAGING - Do NOT push to Working
+queue_check { topic: "<name>", area: "Staging" }    # confirm ready
+topics_push { topic: "<name>", area: "Working" }
+
+unispec_read_spec { topic: "<name>", area: "Working" }
+tasks_list       { topic: "<name>", area: "Working" }
+task_status      { topic: "<name>", area: "Working", status: "working" }
+
+# for each task you finish:
+tasks_complete   { topic: "<name>", task_index: <N> }
+index_add        { topic: "<name>", path: "src/<file>", link_type: "implementation" }
+notes_add        { topic: "<name>", note: "<decision not in spec>" }    # only when relevant
+```
+
+### Hand off to testing
+```
+queue_add    { topic: "<name>", area: "Working" }   # if Working requires queue in your mode
+topics_push  { topic: "<name>", area: "Testing" }
 ```
 
 ---
 
-## Core Concepts
-
-### Topics
-A **topic** is a unit of work - a feature, bug fix, or project. Each topic lives in one area and contains:
-- `spec.md` - The specification document
-- `task.md` - The task list with completion status
-- Notes section at bottom of task.md
-
-### The Index
-The **index** tracks relationships between specs and code files:
-- Links files to topics with metadata (tags, annotation, type)
-- Enables finding "what spec does this file implement?"
-- Enables finding "what files implement this spec?"
-- Full graph visualization available
-
-### The Queue
-The **queue** (`queue.md`) is an ordered list of topics to work on:
-- Prioritized work list
-- Topics can be added, removed, reordered
-
----
-
-## MCP Tools Reference
-
-**Use these tools for all operations.**
-
-### Area & Topic Management
-- `areas_list` - List all areas (Staging, Working, Testing, Fixing, Build)
-- `topics_list [area]` - List topics in an area
-- `topics_add {topic, area}` - Create new topic (creates folder structure only)
-- `topics_delete {topic, area, force}` - Delete topic
-- `topics_show {topic, area}` - Show topic files and structure
-- `topics_push {topic, area, source_area}` - Move topic to another area
-- `topics_pull {topic, source_area}` - Pull topic from another area into Working
-- `topics_progress [area]` - Show completion progress across topics
-
-### Spec & Tasks
-- `spec_add {topic, area}` - Create *_spec.md and *_task.md from templates (area: Staging)
-- `spec_read {topic, area}` - Read spec content (area: Staging)
-- `spec_write {topic, area, content}` - Write spec content
-- `task_read {topic, area}` - Read task content (area: Staging)
-- `task_write {topic, area, content}` - Write full task content
-- `task_status {topic, area, status}` - Update task status: pending, working, or complete
-- `tasks_list {topic, area}` - List all tasks with status
-
-### Notes
-- `notes_read {topic, area}` - Read notes section from task.md
-- `notes_add {topic, note, area}` - Add a note to notes section
-
-### Queue (Ordered Work List)
-- `queue_list [area]` - List ordered queue of topics (area: Staging)
-- `queue_add {topic, position, area}` - Add to queue (0=first, -1=last)
-- `queue_remove {topic, area}` - Remove from queue
-- `queue_reorder {topic, new_position, area}` - Reorder queue
-
-### Index (File ↔ Spec Linking)
-- `index_add {topic, path, area, link_type, tags, annotation}` - Link file to topic
-- `index_find {query, by}` - Find links by topic/path/tag
-- `index_lookup {id}` - Find export by full ID (topic:name)
-- `index_list [topic, path, tag]` - List all index links with filters
-- `index_graph` - Export full relationship graph JSON
-- `index_backlinks {topic}` - Generate backlinks for a topic
-- `unispec_bind_spec {spec_path, file_path, topic, area}` - Bind code file to spec
-
----
-
-## Standard Workflow
-
-### 1. Start Work
-```
-# Check queue for prioritized work
-queue_list
-
-# Check what's in Working area
-topics_list {area: "Working"}
-
-# Get the spec for the topic you're working on
-spec_read {topic: "feature-name", area: "Working"}
-
-# See tasks for this topic
-tasks_list {topic: "feature-name", area: "Working"}
-```
-
-### 2. Implement
-```
-# Mark task as working
-task_status {topic: "feature-name", area: "Staging", status: "working"}
-
-# Do the work, mark tasks complete when done
-task_status {topic: "feature-name", area: "Staging", status: "complete"}
-
-# If you need to modify the spec:
-spec_write {topic: "feature-name", area: "Staging", content: "..."}
-
-# Add implementation notes
-notes_add {topic: "feature-name", note: "Using JWT tokens for auth"}
-```
-
-### 3. Complete
-```
-# When done, mark as complete
-task_status {topic: "feature-name", area: "Staging", status: "complete"}
-```
-
-### 4. Verify
-```
-# See full picture
-index_graph
-
-# Find what's linked to a spec
-index_find {query: "feature-name", by: "topic"}
-
-# Get backlinks
-index_backlinks {topic: "feature-name"}
-
-# Check progress
-topics_progress {area: "Working"}
-```
-
----
-
-## Key Principles
-
-1. **Default: Do NOT create files** - Wait for permission to write
-
-2. **Use MCP tools first** - Only use direct file operations when MCP tools cannot do what you need
-
-3. **Plan first** - List, clarify, plan before writing specs
-
-4. **Read the spec before coding** - Always use `unispec_read_spec` to understand requirements
-
-5. **Track progress with tasks** - Mark tasks complete as you finish them
-
-6. **Link files to specs** - Use `index_add` for every file created so relationships are tracked
-
-7. **Use the queue** - Maintain prioritized work list
-
-8. **Move work through areas** - Push to next area when ready
-
-9. **Verify with index** - Use graph and backlinks to understand full picture
-
----
-
-## File Structure
+## 6. File layout the tools create
 
 ```
 spec/
-├── area.md                    # Area metadata (optional)
-├── master.md                  # Project master spec (optional)
-├── queue.md                   # Ordered work queue
-├── Staging/
-│   └── topic-name/
-│       └── spec.md, task.md
-├── Working/
-│   └── topic-name/
-│       ├── spec.md
-│       └── task.md
-├── Testing/
-├── Fixing/
-└── Build/
+├── <Area>/
+│   ├── area.md
+│   ├── queue.md
+│   └── <topic>/
+│       ├── topic.md
+│       ├── <topic>_spec.md
+│       └── <topic>_task.md
 ```
+
+For nested topics (`auth/login`), the spec file becomes `auth-login_spec.md` and the task file `auth-login_task.md`, both inside `spec/<Area>/auth/login/`.
 
 ---
 
-## Notes
-- Task indices are 0-based (first task is index 0)
-- Area names are case-insensitive internally
-- The queue defaults to showing topics by modification date if queue.md doesn't exist
-- Always check the queue before starting new work
-- **Wait for write mode permission before creating files**
+## 7. Definition of done
+
+A turn is complete when:
+- Every state change you intended has a confirmed MCP response.
+- Every task you finished is `[x]` (via `tasks_complete`).
+- `task_status` reflects whether the topic is `pending`, `working`, or `complete`.
+- Every file you wrote outside `spec/` is registered via `index_add`.
+- Any divergence from the spec is captured via `notes_add`.
+- If the topic is ready for the next area, you either called `topics_push` or named the specific blocker that prevents the push.
+
+---
+
+## 8. Failure modes to avoid
+
+- Calling `task_write` before a spec exists — it returns an error. Use `spec_add` first.
+- Calling `topics_push` from Staging without `queue_add` — gated by `queue.md`.
+- Hand-writing `---` frontmatter inside `content` / `spec_content` / `task_content` — it gets stripped, but it's cleaner to omit it.
+- Using `topic_read`, `spec_read`, or `task_read` — none of these exist. Use `read_asset` or `unispec_read_spec`.
+- Using `index_callers`, `index_remove`, `index_cleanup`, `index_tags`, `index_exports`, `index_query`, or `index_depends` as MCP tools — they are CLI commands only, not in the MCP surface.
+- Editing topic/spec/task files via the host's Write tool — bypasses frontmatter and breaks `tasks_list` / `task_status`.
