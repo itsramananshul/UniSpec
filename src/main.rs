@@ -15,10 +15,10 @@ use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
     AreaCommands, AreaOrderCommands, AutoCommands, ConnectorCommands, IndexCommands,
     IngestCommands, ModeCommands, OrderCommands, ParseCommands, PattyCommands, PkgCommands,
-    TopicCommands,
+    SpecCommands, TopicCommands,
 };
 use crate::cli::{Cli, Commands};
-use crate::commands::{area, index, ingest, init, init_editor, repo, set, topic};
+use crate::commands::{area, index, ingest, init, init_editor, repo, set, spec, topic};
 
 fn get_show_platypus() -> bool {
     crate::fs::config::get_paddy_enabled().unwrap_or(true)
@@ -322,15 +322,48 @@ fn main() -> Result<()> {
             let path_str = path.map(|p| p.to_string_lossy().to_string());
             mcp::server::run_mcp_server(path_str.as_deref())?;
         }
-        Some(Commands::Spec { name: _ }) => {
-            let master_path = crate::fs::spec_dir().join("master.md");
-            if master_path.exists() {
-                let content = std::fs::read_to_string(&master_path)?;
-                println!("{}", content);
-            } else {
-                println!("No master spec found. Create spec/master.md to add context.");
+        Some(Commands::Spec(spec_cmd)) => match spec_cmd {
+            SpecCommands::Show { name: _ } => {
+                let master_path = crate::fs::spec_dir().join("master.md");
+                if master_path.exists() {
+                    let content = std::fs::read_to_string(&master_path)?;
+                    println!("{}", content);
+                } else {
+                    println!("No master spec found. Create spec/master.md to add context.");
+                }
             }
-        }
+            SpecCommands::Add {
+                topic,
+                area,
+                short,
+                spec_content,
+                task_content,
+            } => {
+                let area = area.unwrap_or_else(|| {
+                    crate::fs::config::load_config()
+                        .ok()
+                        .map(|c| c.area)
+                        .unwrap_or_else(|| "Staging".to_string())
+                });
+                let out = spec::run_spec_add(
+                    &topic,
+                    Some(&area),
+                    &short,
+                    &spec_content,
+                    &task_content,
+                )?;
+                println!(
+                    "✅ Spec and task created for '{}' in {}/\n  {}\n  {}",
+                    out.topic,
+                    out.area,
+                    out.spec_path.display(),
+                    out.task_path.display(),
+                );
+                if get_show_platypus() {
+                    platypus::happy();
+                }
+            }
+        },
         Some(Commands::Mode(mode_cmd)) => match mode_cmd {
             ModeCommands::List => {
                 let modes = agent_mode::list_modes()?;
