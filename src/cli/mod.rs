@@ -184,6 +184,9 @@ pub enum Commands {
     /// Spec commands (show, add)
     #[command(subcommand)]
     Spec(SpecCommands),
+    /// Readiness queue commands (add)
+    #[command(subcommand)]
+    Queue(QueueCommands),
     /// Agent mode commands
     #[command(subcommand)]
     Mode(ModeCommands),
@@ -398,6 +401,25 @@ pub enum AreaOrderCommands {
     },
     /// Reset order to default (no custom order)
     Reset,
+}
+
+#[derive(Subcommand)]
+pub enum QueueCommands {
+    /// Add a topic to an area's readiness queue (`spec/<area>/queue.md`).
+    /// Required before pushing out of areas listed under `[readiness].areas`
+    /// in `mode.toml` (default: Staging, Fixing).
+    Add {
+        /// Topic name to enqueue
+        topic: String,
+        /// Area whose queue to add to. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
+        /// 0-based position in the queue. Negative or out-of-range = append
+        /// to the end (default).
+        #[arg(short, long, default_value_t = -1)]
+        position: i32,
+    },
 }
 
 #[derive(Subcommand)]

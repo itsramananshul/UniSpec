@@ -15,10 +15,10 @@ use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
     AreaCommands, AreaOrderCommands, AutoCommands, ConnectorCommands, IndexCommands,
     IngestCommands, ModeCommands, OrderCommands, ParseCommands, PattyCommands, PkgCommands,
-    SpecCommands, TopicCommands,
+    QueueCommands, SpecCommands, TopicCommands,
 };
 use crate::cli::{Cli, Commands};
-use crate::commands::{area, index, ingest, init, init_editor, repo, set, spec, topic};
+use crate::commands::{area, index, ingest, init, init_editor, queue, repo, set, spec, topic};
 
 fn get_show_platypus() -> bool {
     crate::fs::config::get_paddy_enabled().unwrap_or(true)
@@ -374,6 +374,30 @@ fn main() -> Result<()> {
                     out.area,
                     out.spec_path.display(),
                     out.task_path.display(),
+                );
+                if get_show_platypus() {
+                    platypus::happy();
+                }
+            }
+        },
+        Some(Commands::Queue(queue_cmd)) => match queue_cmd {
+            QueueCommands::Add {
+                topic,
+                area,
+                position,
+            } => {
+                let area = resolve_area_from_config(area);
+                let out = queue::run_queue_add(&topic, &area, position)?;
+                println!(
+                    "✅ Added '{}' to {}/{} at position {}",
+                    out.topic,
+                    out.area,
+                    out.queue_file,
+                    if out.position < 0 {
+                        "end".to_string()
+                    } else {
+                        out.position.to_string()
+                    }
                 );
                 if get_show_platypus() {
                     platypus::happy();

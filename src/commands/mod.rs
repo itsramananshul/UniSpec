@@ -6,6 +6,7 @@ pub mod init;
 pub mod init_editor;
 pub mod pull;
 pub mod push;
+pub mod queue;
 pub mod repo;
 pub mod set;
 pub mod spec;

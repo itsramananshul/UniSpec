@@ -1162,46 +1162,24 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
         }
         // === Queue Add ===
         "queue_add" => {
-            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("queue_add requires 'topic'"))?;
             let position = args.get("position").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Staging");
 
-            let queue_file = crate::agent::mode::get_readiness_queue_file();
-            let queue_path = crate::fs::spec_dir().join(area).join(&queue_file);
-            let mut content = if queue_path.exists() {
-                std::fs::read_to_string(&queue_path)?
-            } else {
-                "# Task Queue\n\nOrdered list of topics to work on:\n".to_string()
-            };
-
-            // Parse existing items
-            let mut items: Vec<String> = content
-                .lines()
-                .filter(|l| l.trim().starts_with("- "))
-                .map(|l| l.trim().trim_start_matches("- ").to_string())
-                .collect();
-
-            // Add topic at position
-            if position < 0 || position as usize >= items.len() {
-                items.push(topic.to_string());
-            } else {
-                items.insert(position as usize, topic.to_string());
-            }
-
-            // Rebuild content
-            let header = "# Task Queue\n\nOrdered list of topics to work on:\n";
-            content = header.to_string();
-            for item in items {
-                content.push_str(&format!("- {}\n", item));
-            }
-
-            std::fs::write(&queue_path, content)?;
-            Ok(
-                json!({ "success": true, "message": format!("Added '{}' to queue at position {}", topic, position), "topic": topic, "area": area, "queue_file": queue_file }),
-            )
+            let out = crate::commands::queue::run_queue_add(topic, area, position)?;
+            Ok(json!({
+                "success": true,
+                "message": format!("Added '{}' to queue at position {}", out.topic, out.position),
+                "topic": out.topic,
+                "area": out.area,
+                "queue_file": out.queue_file
+            }))
         }
         // === Queue Remove ===
         "queue_remove" => {
