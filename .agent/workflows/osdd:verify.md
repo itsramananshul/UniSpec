@@ -1,86 +1,125 @@
 ---
-description: Verify implementation matches specification
+description: Trace every requirement in the spec to code in the repo; record evidence
 ---
 
 # /osdd:verify
 
-Verify that implementation matches the specification. Trace each requirement to code.
+Verify that the implementation matches the spec. Trace each `REQ-*` to code, with file:line evidence.
+
+The `osdd:` prefix is historical. This workflow runs against the UniSpec MCP server; the binary is `unispec`.
 
 ## Usage
 ```
-/osdd:verify <TopicName> [Working|Build]
+/osdd:verify <TopicName> [Working|Testing|Build]
 ```
+Default area: `Testing`.
 
 ## Rules
-1. **Be thorough** - Check every REQ-*
-2. **Show evidence** - Cite file and line number
-3. **Don't assume** - If not found, mark as missing
-4. **Distinguish partial** - Similar but not exact is partial
 
-## Status Meanings
+1. **Be thorough.** Check every `REQ-*` in the spec.
+2. **Show evidence.** Cite `<file>:<line>` for every status.
+3. **Don't assume.** If the code isn't found, mark `✗ missing`.
+4. **Distinguish partial.** "Similar but not exact" is `⚠ partial`, not `✓`.
+
+## Status meanings
+
 | Status | Meaning |
 |--------|---------|
-| ✓ Implemented | Code exists and matches spec |
-| ⚠ Partial | Partially implemented or different |
-| ✗ Missing | Not found in codebase |
+| `✓ implemented` | Code exists and matches the requirement. |
+| `⚠ partial` | Partially implemented or behaviorally different. |
+| `✗ missing` | Not found anywhere in the repo. |
+
+## Tools
+
+MCP:
+- `unispec_read_spec { topic, area }`
+- `read_asset { topic, asset_type: "spec", area }`
+- `index_list { topic }`
+- `index_find { query, by: "topic" | "path" | "tag" }`
+- `index_backlinks { topic }`
+- `notes_add { topic, note }`
+- `topics_push { topic, area }`
+- `task_status { topic, area, status }`
+
+CLI:
+- `unispec auto verify <topic>` — runs the configured verifier (if present).
+- `unispec index callers <symbol>` — find references; CLI only, not MCP.
 
 ## Steps
 
-### 1. Locate Files
-- Spec: `spec/<Area>/<TopicName>/specs.md`
-- Implementation: Search `src/` or use `osdd index find --topic <TopicName>`
-
-### 2. Extract Requirements
-From specs.md, list all `REQ-*` items:
-```markdown
-## Requirements
-- REQ-1: System SHALL do X
-- REQ-2: System SHOULD do Y
+### 1. Load the spec
+```
+unispec_read_spec { topic: "<TopicName>", area: "<Area>" }
+index_list        { topic: "<TopicName>" }
 ```
 
-### 3. Trace Each Requirement
-For each REQ-*:
-1. Search codebase for relevant code
-2. Check if it matches the requirement
-3. Record status with evidence
+### 2. Extract requirements
+From the spec's Requirements table, list every `REQ-*` ID.
 
-### 4. Generate Report
-```markdown
-# Verification Report: <TopicName>
+### 3. Trace each requirement
+For each `REQ-NNN`:
+- From `index_list`, identify candidate files (filter `link_type: "implementation"`).
+- Read those files; locate the code that implements (or should implement) the requirement.
+- Record state and evidence: `<file>:<line>`.
 
-## Coverage
-| REQ | Status | Evidence |
-|-----|--------|----------|
-| REQ-1 | ✓ | src/auth.ts:42 |
-| REQ-2 | ✗ | Not found |
+### 4. Run the verifier (if configured)
+```bash
+unispec auto verify <TopicName>
+```
+Combine its output with your manual trace.
 
-## Summary
-3/4 requirements verified (75%)
+### 5. Report
+```
+notes_add {
+  topic: "<TopicName>",
+  note: "Verification YYYY-MM-DD\n\n## Coverage\n| REQ | Status | Evidence |\n|-----|--------|----------|\n| REQ-001 | ✓ | src/auth/login.rs:42 |\n| REQ-002 | ✗ | not found |\n| REQ-003 | ⚠ | src/auth/login.rs:88 — locks after 10 failures, spec says 5 |\n\n## Summary\nN/M requirements verified."
+}
 ```
 
-## Output Formats
+### 6. Route (only if user added `--fix`)
+- If any `✗` or `⚠`:
+  ```
+  topics_push { topic: "<TopicName>", area: "Fixing" }
+  task_status { topic: "<TopicName>", area: "Fixing", status: "working" }
+  ```
+  Then close the gaps in `src/`, flip checkboxes, and:
+  ```
+  topics_push { topic: "<TopicName>", area: "Testing" }
+  task_status { topic: "<TopicName>", area: "Testing", status: "complete" }
+  ```
 
-### All Pass
+## Definition of done
+
+- Every `REQ-*` in the spec has a recorded state with `<file>:<line>` evidence.
+- The verification block is appended via `notes_add`.
+- With `--fix`: all gaps closed, topic returned to `Testing`, `task_status: complete`.
+- Without `--fix`: gaps are reported by `REQ-*` ID; the topic remains in its current area.
+
+## Output formats
+
+### All pass
 ```
 ✓ Verification Complete: <TopicName>
 Coverage: 5/5 (100%)
 All requirements verified.
-Ready for Build.
+Ready for /osdd:test or push to Build.
 ```
 
-### With Gaps
+### With gaps
 ```
 ✓ Verification Complete: <TopicName>
 Coverage: 4/5 (80%)
 
-✗ REQ-3: Feature not implemented
-  Recommendation: Add user preference storage
+✗ REQ-003: Feature not implemented
+  Evidence: not found
+  Recommendation: implement user preference storage
 
-⚠ REQ-4: Partial implementation
-  Found: logs with redaction
-  Expected: no password logging at all
+⚠ REQ-004: Partial implementation
+  Evidence: src/auth/login.rs:88
+  Found: 10-failure lockout; spec says 5.
 
 Options:
-1. /osdd:build <TopicName> to fill gaps
-2. Update spec to remove requirement
+1. /osdd:build <TopicName>     # add work to close the gaps
+2. Update the spec             # if 10 is correct, change REQ-004
+3. /osdd:verify --fix          # repair now, return to Testing
 ```

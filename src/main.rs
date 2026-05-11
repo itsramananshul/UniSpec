@@ -15,13 +15,24 @@ use crate::agent::{connector as agent_connector, mode as agent_mode};
 use crate::cli::{
     AreaCommands, AreaOrderCommands, AutoCommands, ConnectorCommands, IndexCommands,
     IngestCommands, ModeCommands, OrderCommands, ParseCommands, PattyCommands, PkgCommands,
-    TopicCommands,
+    QueueCommands, SpecCommands, TopicCommands,
 };
 use crate::cli::{Cli, Commands};
-use crate::commands::{area, index, ingest, init, init_editor, repo, set, topic};
+use crate::commands::{area, index, ingest, init, init_editor, queue, repo, set, spec, topic};
 
 fn get_show_platypus() -> bool {
     crate::fs::config::get_paddy_enabled().unwrap_or(true)
+}
+
+/// Resolve a CLI-supplied area override to a concrete area name.
+/// Falls back to `.agent/config.toml`'s `area` field, then to "Staging".
+fn resolve_area_from_config(area: Option<String>) -> String {
+    area.unwrap_or_else(|| {
+        crate::fs::config::load_config()
+            .ok()
+            .map(|c| c.area)
+            .unwrap_or_else(|| "Staging".to_string())
+    })
 }
 
 fn main() -> Result<()> {
@@ -196,37 +207,53 @@ fn main() -> Result<()> {
             },
         },
         Some(Commands::Topic(topic_cmd)) => match topic_cmd {
-            TopicCommands::Add { topic, area } => {
-                topic::run_new(&topic, &area)?;
+            TopicCommands::Add {
+                topic,
+                area,
+                short,
+                content,
+            } => {
+                let area = resolve_area_from_config(area);
+                topic::run_new(&topic, &area, Some(&short), Some(&content))?;
                 if get_show_platypus() {
                     platypus::happy();
                 }
             }
-            TopicCommands::List { area, hierarchy: _ } => topic::run_list(&area, false)?,
+            TopicCommands::List { area, hierarchy: _ } => {
+                let area = resolve_area_from_config(area);
+                topic::run_list(&area, false)?
+            }
             TopicCommands::Push { topic, area, from } => {
+                let area = resolve_area_from_config(area);
                 topic::run_push(&topic, &area, from.as_deref())?;
                 if get_show_platypus() {
                     platypus::working();
                 }
             }
             TopicCommands::Pull { topic, area } => {
+                let area = resolve_area_from_config(area);
                 topic::run_pull(&topic, &area)?;
                 if get_show_platypus() {
                     platypus::working();
                 }
             }
-            TopicCommands::Remove { topic, force } => {
-                topic::run_delete(
-                    &topic,
-                    &crate::fs::config::load_config()?.area.as_str(),
-                    force,
-                )?;
+            TopicCommands::Remove { topic, area, force } => {
+                let area = resolve_area_from_config(area);
+                topic::run_delete(&topic, &area, force)?;
                 if get_show_platypus() {
                     platypus::sad();
                 }
             }
             TopicCommands::Show { topic, all, from } => {
-                topic::run_show(&topic, all, from.as_deref())?
+                // When neither --from nor --all is given, default to the
+                // configured area so `unispec topic show <name>` picks the
+                // expected one.
+                let resolved_from = if all {
+                    from
+                } else {
+                    Some(resolve_area_from_config(from))
+                };
+                topic::run_show(&topic, all, resolved_from.as_deref())?
             }
             TopicCommands::Progress { area } => topic::run_progress(area.as_deref())?,
             TopicCommands::Order { action } => match action {
@@ -311,15 +338,72 @@ fn main() -> Result<()> {
             let path_str = path.map(|p| p.to_string_lossy().to_string());
             mcp::server::run_mcp_server(path_str.as_deref())?;
         }
-        Some(Commands::Spec { name: _ }) => {
-            let master_path = crate::fs::spec_dir().join("master.md");
-            if master_path.exists() {
-                let content = std::fs::read_to_string(&master_path)?;
-                println!("{}", content);
-            } else {
-                println!("No master spec found. Create spec/master.md to add context.");
+        Some(Commands::Spec(spec_cmd)) => match spec_cmd {
+            SpecCommands::Show { name: _ } => {
+                let master_path = crate::fs::spec_dir().join("master.md");
+                if master_path.exists() {
+                    let content = std::fs::read_to_string(&master_path)?;
+                    println!("{}", content);
+                } else {
+                    println!("No master spec found. Create spec/master.md to add context.");
+                }
             }
-        }
+            SpecCommands::Add {
+                topic,
+                area,
+                short,
+                spec_content,
+                task_content,
+            } => {
+                let area = area.unwrap_or_else(|| {
+                    crate::fs::config::load_config()
+                        .ok()
+                        .map(|c| c.area)
+                        .unwrap_or_else(|| "Staging".to_string())
+                });
+                let out = spec::run_spec_add(
+                    &topic,
+                    Some(&area),
+                    &short,
+                    &spec_content,
+                    &task_content,
+                )?;
+                println!(
+                    "✅ Spec and task created for '{}' in {}/\n  {}\n  {}",
+                    out.topic,
+                    out.area,
+                    out.spec_path.display(),
+                    out.task_path.display(),
+                );
+                if get_show_platypus() {
+                    platypus::happy();
+                }
+            }
+        },
+        Some(Commands::Queue(queue_cmd)) => match queue_cmd {
+            QueueCommands::Add {
+                topic,
+                area,
+                position,
+            } => {
+                let area = resolve_area_from_config(area);
+                let out = queue::run_queue_add(&topic, &area, position)?;
+                println!(
+                    "✅ Added '{}' to {}/{} at position {}",
+                    out.topic,
+                    out.area,
+                    out.queue_file,
+                    if out.position < 0 {
+                        "end".to_string()
+                    } else {
+                        out.position.to_string()
+                    }
+                );
+                if get_show_platypus() {
+                    platypus::happy();
+                }
+            }
+        },
         Some(Commands::Mode(mode_cmd)) => match mode_cmd {
             ModeCommands::List => {
                 let modes = agent_mode::list_modes()?;
@@ -550,7 +634,7 @@ fn main() -> Result<()> {
                 spec_file: _,
             } => {
                 let result =
-                    crate::agent::auto::build::run_auto_build(&topic, area.as_deref(), None)?;
+                    crate::agent::auto::build::run_auto_build(topic.as_deref(), area.as_deref(), None)?;
                 println!("Build result: {:?}", result);
             }
             AutoCommands::Verify { topic, area } => {

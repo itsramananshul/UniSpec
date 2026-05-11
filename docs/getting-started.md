@@ -1,36 +1,36 @@
 # Getting Started with UniSpec
 
-UniSpec is a tool that helps you build better software by organizing your work around specifications (specs). Instead of jumping straight into code, you define what you're building first, then track your progress as you implement it.
+UniSpec is a spec-driven workflow tool. You write a spec for each feature, then move it through a fixed pipeline of areas (default: `Staging → Working → Testing → Fixing → Build`). Code is linked back to specs, so AI agents and humans both know exactly what's being built and why.
 
-This guide walks you through the basics.
+This guide walks through the basics.
 
 ---
 
 ## What is UniSpec?
 
-Think of UniSpec as a task manager that revolves around **specs** instead of generic todos. Each feature or project gets a spec that describes:
+For each feature, you produce three files under `spec/<Area>/<topic>/`:
 
-- **What** you're building (requirements)
-- **Why** you're building it (problem statement)
-- **How** you'll know it's done (acceptance criteria)
-- **What** tasks need to be done
+| File | Purpose |
+|------|---------|
+| `topic.md` | What this topic is — short description, sub-topics, notes. |
+| `<topic>_spec.md` | **What** you're building: requirements, examples, data model. |
+| `<topic>_task.md` | The implementation tasks, each tracked with `- [ ]` / `- [x]`. |
 
-Your specs move through **areas** (like Staging → Working → Build) as you progress from planning to implementation to done.
+UniSpec's MCP server exposes tools that an AI agent (Claude, Cursor, Windsurf, Cline, etc.) calls directly — so the agent can create topics, write specs, flip checkboxes, and link code without you copy-pasting commands.
 
 ---
 
 ## Installation
 
-### Quick Install
-
 ```bash
-# Linux/macOS (using Cargo)
+# Linux / macOS (Cargo)
 cargo install unispec
 
-# Or download a release from GitHub
+# Arch Linux (AUR)
+yay -S unispec
 ```
 
-### Verify It Works
+Verify:
 
 ```bash
 unispec --version
@@ -38,359 +38,217 @@ unispec --version
 
 ---
 
-## Your First Project
+## First project
 
-### Step 1: Create a Project Directory
+### 1. Initialize
 
 ```bash
 mkdir my-first-project
 cd my-first-project
-```
-
-### Step 2: Initialize UniSpec
-
-```bash
 unispec init
 ```
 
-This creates the basic structure:
+This creates:
 
 ```
-my-project/
-├── spec/              # Your specs live here
-│   ├── Staging/       # New specs start here
-│   ├── Working/       # Specs you're actively working on
-│   └── Build/         # Completed specs ready to deploy
-└── .agent/            # UniSpec configuration
+my-first-project/
+├── spec/
+│   ├── Staging/area.md
+│   ├── Working/area.md
+│   ├── Testing/area.md
+│   ├── Fixing/area.md
+│   └── Build/area.md
+└── .agent/
+    ├── config.toml
+    ├── skill.md
+    ├── modes/default/
+    └── workflows/
 ```
 
-### Step 3: Launch the Interactive Interface
+The areas come from the default mode (`.agent/modes/default/mode.toml`).
+
+### 2. Launch the TUI
 
 ```bash
 unispec
 ```
 
-This opens the **TUI** (Terminal User Interface) - a visual way to navigate your specs. You'll see:
+Areas appear on the left; topics show up inside each area once you create them. The platypus mascot is off by default — toggle with `\`.
 
-- Areas on the left (Staging, Working, Build)
-- Topics in each area
-- Paddy the platypus (toggle with `\`)
+### 3. Create a topic
 
-### Step 4: Create Your First Topic
+In the TUI:
+1. `↓` to highlight `Staging`, `→` to enter.
+2. `n` to create a topic.
+3. Type a name (kebab-case recommended, e.g., `user-login`).
+4. `Enter`.
 
-With the TUI open:
-
-1. Press `↓` to select "Staging"
-2. Press `→` to enter Staging
-3. Press `n` to create a new topic
-4. Type a name like "User Login"
-5. Press `Enter`
-
-Now you've created a topic!
-
----
-
-## Understanding Topics
-
-A **topic** is a unit of work - a feature, bug fix, or project. Each topic contains:
-
-### `spec.md` - The Specification
-
-This describes **what** you're building. Here's a simple template:
-
-```markdown
-# Feature Name
-
-## Problem Statement
-What problem does this solve?
-
-## User Stories
-- As a [user], I want [action] so that [benefit]
-
-## Requirements
-- [ ] Must have feature
-- [ ] Another must have
-
-## Acceptance Criteria
-1. Criterion 1
-2. Criterion 2
-```
-
-### `tasks.md` - The Tasks
-
-This lists the work to be done:
-
-```markdown
-# Tasks - Feature Name
-
-## Implementation
-- [ ] Task 1
-- [ ] Task 2
-
-## Testing  
-- [ ] Test 1
-- [ ] Test 2
-```
-
----
-
-## The Basic Workflow
-
-### 1. Create a Spec in Staging
-
-Start by creating a topic in Staging. This is where new ideas go before they're ready for work.
-
-### 2. Move to Working When Ready
-
-When you've written your spec and it's ready to implement:
+That creates `spec/Staging/user-login/topic.md`. The spec file (`user-login_spec.md`) and task file (`user-login_task.md`) are written by `unispec spec add` (or by an agent via the MCP `spec_add` tool):
 
 ```bash
-# From command line
-unispec topic push "Your Topic" Working
+unispec spec add \
+  --topic user-login \
+  --short "Email/password login with JWT" \
+  --spec-content "Users submit email/password to POST /login. ..." \
+  --task-content "- [ ] Implement POST /login
+- [ ] Add JWT signing
+- [ ] Write tests"
 ```
-
-Or in the TUI:
-- Select your topic
-- Press `p`
-- Type "Working"
-
-### 3. Implement and Track Progress
-
-Now you're in Working! This is where you:
-- Write code
-- Check off tasks as you complete them
-- Update the spec if requirements change
-
-### 4. Move to Build When Done
-
-When everything is implemented and tested:
-
-```bash
-unispec topic push "Your Topic" Build
-```
-
-Build is for completed work - ready to deploy or ship.
-
-### 5. Done!
-
-Your spec has moved through the full workflow: Staging → Working → Build
 
 ---
 
-## Using the TUI
+## File layout the tools create
 
-The TUI is your primary interface. Here's what you need to know:
+```
+spec/
+└── <Area>/
+    └── <topic>/
+        ├── topic.md
+        ├── <topic>_spec.md      # slashes/spaces in <topic> become '-'
+        └── <topic>_task.md
+```
 
-### Navigation
+For a nested topic `auth/login`, the files are `auth-login_spec.md` and `auth-login_task.md` inside `spec/<Area>/auth/login/`.
+
+---
+
+## The pipeline
+
+| Area | Stage |
+|------|-------|
+| Staging | Writing the spec. |
+| Working | Implementing code in `src/`. |
+| Testing | Running build/test pipelines. |
+| Fixing | Repairing issues found in Testing. |
+| Build | Done. Treated as immutable. |
+
+To move a topic between areas:
+
+```bash
+unispec topic push <topic> --area <target> --from <source>
+```
+
+Both `--area` and `--from` default to the area set in `.agent/config.toml` when omitted (falling back to `Staging`). Or in the TUI, highlight the topic and press `p`.
+
+`Staging` and `Fixing` are gated by a **readiness queue**: a topic must appear in `spec/<area>/queue.md` before it can be pushed out. Use the CLI directly:
+
+```bash
+unispec queue add <topic>                        # add to current area's queue
+unispec queue add <topic> --area Fixing          # explicit area override
+```
+
+The MCP `queue_add` tool exposes the same logic for AI agents. From inside the TUI, you can also press `q` while highlighting a topic to add it to the current area's queue.
+
+---
+
+## TUI cheatsheet
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Move between topics/areas |
-| `→` | Enter selected area or topic |
+| `↑` / `↓` | Move between items |
+| `→` | Enter an area or topic |
 | `←` | Go back |
-| `Enter` | Open a topic file |
-
-### Actions
-
-| Key | Action |
-|-----|--------|
+| `Enter` | Open the highlighted file in `$EDITOR`, then `nano`, then `vi`; falls back to printing content if none found |
 | `n` | Create new topic |
-| `r` | Remove topic (with confirmation) |
+| `r` | Remove topic (confirm) |
 | `p` | Push topic to another area |
 | `f` | Find files linked to this topic |
-| `\` | Toggle Paddy the platypus |
-| `q` | Quit |
+| `/` | Search/filter |
+| `\` | Toggle the platypus mascot |
+| `q` | Add the highlighted topic to the area queue (when inside a TopicList) |
+| `q` | Quit (when on the area-selection screen) |
 
-### Tips
-
-- Press `/` to search/filter topics
-- Your specs are just regular Markdown files - you can edit them in your favorite editor too
-- Use `unispec topic list` to see all topics from the command line
+Your specs are plain Markdown — open them in any editor. `unispec topic list` works from the command line too.
 
 ---
 
-## Quick Command Reference
+## Quick CLI reference
 
 ```bash
-# Start the TUI
-unispec
-
-# Initialize a new project
-unispec init
-
-# Create a topic
-unispec topic add "Feature Name"
-
-# List topics
-unispec topic list
-
-# Show progress
-unispec topic progress
-
-# Move a topic to another area
-unispec topic push "Feature Name" Working
-
-# List areas
+unispec                                        # launch TUI
+unispec init                                   # initialize project
+unispec topic add <name> --short "..." \
+  --content "..."                              # create a topic in the default area
+unispec topic list                             # list topics in the default area
+unispec topic progress                         # task progress per area
+unispec spec add --topic <name> --short "..." \
+  --spec-content "..." --task-content "..."    # write spec + task files
+unispec queue add <name>                       # add to the area readiness queue
+unispec topic push <name> --area <target> \
+  --from <source>                              # move between areas
 unispec area list
-
-# Show area health
 unispec area health
+unispec index add --topic <name> --path <path>
+unispec mode list
+unispec mode activate <mode>
+unispec mcp                                    # start the MCP server (for agents)
 ```
 
----
-
-## Why Bother with Specs?
-
-You might be thinking "this seems like extra work". Here's why it matters:
-
-1. **Clarity** - Writing down what you're building forces you to think it through
-2. **Communication** - Specs make it easy to share what you're working on
-3. **Tracking** - You always know what stage each feature is in
-4. **Completion** - Acceptance criteria make it clear when you're actually done
+For the complete CLI surface, see [cli-reference.md](cli-reference.md) (or the legacy [commands.md](commands.md)).
 
 ---
 
-## What's Next?
+## Connecting an AI agent
 
-If you just want to use UniSpec, you now know enough! The basic workflow is:
-
-1. `unispec init` - Start a project
-2. `unispec` - Open the TUI
-3. Create topics → Write specs → Implement → Move through areas
-
-But UniSpec can do much more. Read on for advanced features...
-
----
-
-## Advanced Features
-
-### Installing Modes from the Repository
-
-UniSpec has a package repository with pre-built modes for different workflows:
+UniSpec speaks MCP. To let an agent drive the pipeline:
 
 ```bash
-# See what's available
-unispec pkg list
-
-# Search for something specific
-unispec pkg search sprint
-
-# Install a mode
-unispec pkg install sprint-mode
-
-# Install globally (available to all your projects)
-unispec pkg install sprint-mode --global
+unispec init --cursor --cline --windsurf --claude_code
 ```
 
-Different modes give you different area structures. For example:
-- **Simple Mode** - Staging → Working → Build
-- **Sprint Mode** - Backlog → In Sprint → Review → Done
-- **Kanban Mode** - To Do → In Progress → Done
+Drops workflow files into the right editor folders. Or wire the MCP server directly:
 
-### Creating Custom Modes
-
-You can create your own mode with custom areas and workflows:
-
-```bash
-# Create mode directory structure
-mkdir -p .agent/modes/my-mode
+```json
+{
+  "mcpServers": {
+    "unispec": {
+      "command": "unispec",
+      "args": ["mcp"],
+      "cwd": "/abs/path/to/project"
+    }
+  }
+}
 ```
 
-Then add:
-- `mode.toml` - Mode metadata
-- `skill.md` - How AI agents should behave
-- `workflows/` - Step-by-step guides
-- `areas/` - Your custom areas
-
-See [Creating Modes](modes.md) for the full guide.
-
-### Connecting AI Editors
-
-Want AI assistants like Claude, Cursor, or Windsurf to understand your specs?
-
-```bash
-# Add editor integrations
-unispec init --cursor --cline --windsurf --claude-code
-```
-
-This creates workflow files in your editor's config folder. Now your AI can:
-- Read your specs
-- See what tasks need doing
-- Run your connectors
-
-See [MCP Integration](mcp.md) for details.
-
-### Using Connectors
-
-Connectors are custom commands that become MCP tools. Define them in `.agent/config.toml`:
-
-```toml
-[[connector]]
-name = "test"
-description = "Run the test suite"
-command = "pytest"
-args = ["tests/", "-v"]
-```
-
-Now AI can run "run the tests" and it'll execute your test command.
-
-### Indexing Code to Specs
-
-Link your code files to topics so AI knows which code implements which feature:
-
-```bash
-# Link a file to a topic
-unispec index add --topic "user-login" --path src/auth/login.rs
-
-# Find what's linked
-unispec index find "user-login" --by topic
-```
-
-See [Indexing](indexing.md) for patterns and best practices.
-
-### Configuring Your Setup
-
-UniSpec uses a three-level config hierarchy:
-
-1. **Local** - `./.agent/config.toml` (project-specific)
-2. **Global** - `~/.config/unispec/` (user-wide)
-3. **System** - `/usr/share/unispec/` (install-wide)
-
-Local overrides global, which overrides system.
-
-See [Configuration Reference](configuration.md) for all options.
+See [mcp.md](mcp.md) for the full MCP tool surface and per-editor configs.
 
 ---
 
-## Summary
+## Indexing code to specs
 
-You now know how to:
+When an agent (or you) writes a code file, link it to a topic so the spec ↔ code relationship is preserved:
 
-**Beginner:**
-- Initialize a project
-- Create and manage topics
-- Write specs and tasks
-- Move topics through areas (Staging → Working → Build)
-- Use the TUI
+```bash
+unispec index add --topic user-login --path src/auth/login.rs \
+  --link-type implementation \
+  --tags "auth,backend" \
+  --annotation "Core login handler"
+```
 
-**Advanced:**
-- Install modes from the repository
-- Create custom modes
-- Connect AI editors
-- Use connectors
-- Index code to specs
-- Configure your setup
+The link is stored in `spec/index.toml`. Agents can query it with `index_find`, `index_list`, `index_backlinks`, and `index_graph`.
+
+See [indexing.md](indexing.md) for the full feature set.
 
 ---
 
-## Learn More
+## What's next?
 
-- [Commands Reference](commands.md) - Complete CLI documentation
-- [Configuration Reference](configuration.md) - Config files and settings
-- [Creating Modes](modes.md) - Build custom workflows
-- [MCP Integration](mcp.md) - Connect AI agents
-- [Indexing](indexing.md) - Link code to specs
+- [Quickstart](quickstart.md) — same content, five minutes, copy-pasteable
+- [Workflow](workflow.md) — the five-area pipeline rules
+- [Areas](areas.md) — what each area is for
+- [TUI Guide](tui.md) — every keybinding and screen
+- [CLI Reference](cli-reference.md) — every subcommand and flag (the up-to-date reference)
+- [Commands Reference](commands.md) — older long-form CLI documentation
+- [MCP Tools Reference](mcp-tools-reference.md) — every MCP tool, JSON-RPC examples
+- [MCP Integration](mcp-integration.md) — editor configs
+- [Connectors](connectors.md) — shell commands as MCP tools
+- [Architecture](architecture.md) — codebase layout
+- [Troubleshooting](troubleshooting.md) — common errors
+- [MCP Integration](mcp.md) — every MCP tool the server exposes
+- [Modes](modes.md) — customize the pipeline (areas, templates, workflows)
+- [Configuration](configuration.md) — `.agent/config.toml`, env vars, exit codes
+- [Indexing](indexing.md) — link code to specs
 
 ---
 
-*Write the spec first. Code second. Paddy believes in you.* 🦫
+*Write the spec first. Code second.*

@@ -1,208 +1,108 @@
 # MCP Integration
 
-UniSpec speaks MCP (Model Context Protocol). This means you can connect AI agents like Claude, Cursor, Windsurf, and they understand your specs, workflows, and progress.
+UniSpec ships an MCP (Model Context Protocol) server so editors like Claude Code, Cursor, Windsurf, Cline, Zed, and any MCP-aware client can read your specs and drive your workflow.
 
-## What is MCP?
+> **Looking for per-tool JSON-RPC examples?** See [mcp-tools-reference.md](mcp-tools-reference.md). For editor-side configuration, see [mcp-integration.md](mcp-integration.md).
 
-MCP is a protocol that lets AI tools interact with your project. Instead of just chatting with AI, it can:
+## What MCP lets you do
 
-- Read your specs
-- See your workflows
-- Run your connectors
-- Query your progress
-- Understand your project structure
-- Add your own commands & scripts
+- Inspect every area, topic, spec, and task.
+- Create and update topics, specs, and tasks through structured tool calls.
+- Move topics through the pipeline and manage the readiness queue.
+- Flip task checkboxes, add notes, reorder the queue.
+- Link source files to specs and query the index.
 
-## Available MCP Tools
+## Available MCP tools (ground truth)
 
-UniSpec provides **33 built-in MCP tools** plus dynamic tools for each connector you define:
+The MCP server publishes exactly **31 built-in tools** (plus one dynamic `unispec_<name>` tool per connector you've defined). This list is generated from `src/mcp/mod.rs::get_tools()`; if you don't see a tool here, it's not exposed via MCP.
 
-### Topic Management (7 tools)
+### Filename convention (important)
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `topics_list` | List all topics in an area | `unispec topic list` |
-| `topics_add` | Create a new topic | `unispec topic add` |
-| `topics_show` | Show details of a topic (supports `--from` and `--all`) | `unispec topic show` |
-| `topics_delete` | Delete a topic | `unispec topic remove` |
-| `topics_push` | Move a topic to another area (supports `--from`) | `unispec topic push` |
-| `topics_pull` | Pull a topic from another area | `unispec topic pull` |
-| `topics_progress` | Show progress across topics | `unispec topic progress` |
+Topic spec and task files are written as **`<topic-safe>_spec.md`** and **`<topic-safe>_task.md`**, where `<topic-safe>` is the topic name with `/` and ` ` replaced by `-`. For a topic `auth/login` you get `auth-login_spec.md` and `auth-login_task.md` inside `spec/<Area>/auth/login/`. Every read tool (`unispec_read_spec`, `read_asset`, `topics_show`) and every write tool (`spec_add`, `spec_write`, `task_write`, `task_status`) uses this convention. The legacy `spec.md` / `task.md` filenames are not used.
 
-### Area Management (6 tools)
+### Areas
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `areas_list` | List all areas | `unispec area list` |
-| `areas_add` | Add a new area | `unispec area add` |
-| `areas_remove` | Remove an area | `unispec area remove` |
-| `areas_rename` | Rename an area | `unispec area rename` |
-| `areas_default` | Set the default area | `unispec area default` |
-| `areas_health` | Show area health statistics | `unispec area health` |
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `areas_list` | — | List all areas. |
 
-### Index/Link Management (14 tools)
+### Topics
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `index_list` | List all index links (optional filters) | `unispec index list` |
-| `index_add` | Add a link between topic and path | `unispec index add` |
-| `index_remove` | Remove a link between topic and path | `unispec index remove` |
-| `index_find` | Find links by topic, path, tag, or annotation | `unispec index find` |
-| `index_cleanup` | Remove links to non-existent topics/paths | `unispec index cleanup` |
-| `index_tags` | List all unique tags in the index | `unispec index tags` |
-| `index_graph` | Export index as graph JSON for visualization | `unispec index graph` |
-| `index_backlinks` | Generate backlinks markdown for a topic | `unispec index backlinks` |
-| `index_exports` | List exports (functions, classes) for a topic | `unispec index exports` |
-| `index_query` | Query exports by name, type, description, or ID | `unispec index query` |
-| `index_depends` | Find what topics depend on a given topic | `unispec index depends` |
-| `index_lookup` | Find export by full ID (e.g., user-login:login_user) | `unispec index lookup` |
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `topics_list` | — (`area?` defaults to `Staging`) | List topics in an area. |
+| `topics_add` | `topic, area, short, content` | Create topic dir + `topic.md`. `content` must be ≥ 10 chars. Server writes frontmatter; don't include `---` in your `content`. |
+| `topics_show` | `topic` (`area?`, `show_all?`, `from?`) | Show files in a topic. |
+| `topics_delete` | `topic` (`area?`, `force?`) | Delete a topic. |
+| `topics_push` | `topic, area` (`source_area?`) | Move topic to another area. Source areas listed in `[readiness]` (default: `Staging`, `Fixing`) require the topic to be in `<source>/queue.md` first. |
+| `topics_pull` | `topic, source_area` | Pull a topic into `Working`. |
+| `topics_progress` | — (`area?`) | Per-topic task counts. |
 
-### Configuration (2 tools)
+### Asset reading
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `config_get` | Get the current configuration | `unispec set` |
-| `config_set` | Set the default area | `unispec set area` |
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `read_asset` | `topic, asset_type` (`area?`) | `asset_type ∈ {"topic", "spec", "task"}`. Use `topic: "templates"` to read templates from `.agent/modes/default/templates/`. |
+| `unispec_read_spec` | `topic` (`area?`) | Returns spec + task content together. |
 
-### Mode Management (4 tools)
+### Specs & tasks
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `mode_list` | List all available agent modes | `unispec mode list` |
-| `mode_info` | Get detailed info about a mode | `unispec mode info` |
-| `mode_activate` | Activate an agent mode | `unispec mode activate` |
-| `mode_current` | Get the current active mode | `unispec mode current` |
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `spec_add` | `topic, area, short, spec_content, task_content` | Creates `<topic>_spec.md` and `<topic>_task.md` (slashes/spaces in `topic` become `-`). Both content fields must be ≥ 10 chars. |
+| `spec_write` | `topic, content` (`area?`) | Overwrite an existing spec. |
+| `task_write` | `topic, content` (`area?`) | Overwrite an existing task file. **Fails** if the spec doesn't exist. |
+| `task_status` | `topic, status` (`area?`) | Update frontmatter `status:`. Allowed: `pending`, `working`, `complete`. Does not touch `- [ ]` checkboxes. |
+| `tasks_list` | `topic` (`area?`) | List task lines + checkbox state. |
+| `tasks_complete` | `topic, task_index` (`note?`, `area?`) | Flip the 0-indexed task to `[x]`. |
+| `tasks_incomplete` | `topic, task_index` (`note?`, `area?`) | Flip the 0-indexed task back to `[ ]`. |
 
-### Connector (1 tool + dynamic)
+### Notes
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `connector_list` | List all available connectors | `unispec connector list` |
-| `connector_run` | Run a connector command | `unispec connector run` |
-| `unispec_<name>` | Dynamic tool for each connector | `unispec connector run <name>` |
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `notes_read` | `topic` (`area?`) | Read the notes section of `<topic>_task.md`. |
+| `notes_add` | `topic, note` (`area?`) | Append a note. |
 
-### Code Analysis (2 tools) - NEW
+### Readiness queue
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `code_analysis` | Query code analysis data from ingested topics | `unispec ingest run` + TOML |
-| `code_parse` | Parse any file on-demand using tree-sitter | `unispec parse file` |
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `queue_list` | — (`area?`) | Show `spec/<area>/queue.md`. |
+| `queue_add` | `topic` (`position?`, `area?`) | `position: 0` = first; default last. |
+| `queue_remove` | `topic` (`area?`) | Remove topic from queue. |
+| `queue_check` | `topic` (`area?`) | Returns `ready: true|false`. |
+| `queue_reorder` | `topic, new_position` (`area?`) | Move a topic in the queue. |
 
-These tools allow the AI agent to:
-- **Query indexed code**: Get functions, structs, enums from topics stored in `spec/code_analysis.toml`
-- **Parse on-demand**: Extract code elements from any file while debugging or investigating
+### Index (file ↔ spec linking)
 
-**Example usage:**
-```json
-// code_analysis - query indexed topics
-{ "topic": "myproject", "area": "Ingested", "item_type": "functions" }
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `index_add` | `topic, path` (`area?`, `link_type?`, `tags?`, `annotation?`) | Link a file or directory to a topic. |
+| `unispec_bind_spec` | `spec_path, file_path, topic` (`area?`) | Bind a code file to a spec record. |
+| `index_find` | `query` (`by?`) | `by ∈ {"topic", "path", "tag"}`, default `"topic"`. |
+| `index_lookup` | `id` | `id` is `topic:name`. |
+| `index_list` | — (`topic?`, `path?`, `tag?`) | List all links with optional filters. |
+| `index_graph` | — | Export the link graph as JSON. |
+| `index_backlinks` | `topic` | Backlinks markdown block for a topic. |
 
-// code_parse - parse any file
-{ "path": "src/main.rs", "item_type": "functions", "pattern": "handle_" }
-```
+## Tools NOT exposed via MCP
 
-### Configuration (2 tools)
+These commands exist in the CLI but are intentionally not in the MCP surface. Calling them as MCP tool names will fail.
 
-| MCP Tool | Description | CLI Equivalent |
-|----------|-------------|----------------|
-| `config_get` | Get current configuration | Internal |
-| `config_set` | Set the default area | `unispec set` |
+- Area mutation: `areas_add`, `areas_remove`, `areas_rename`, `areas_default`, `areas_health` (use `unispec area …` from the shell).
+- Index mutation/inspection: `index_remove`, `index_cleanup`, `index_tags`, `index_exports`, `index_query`, `index_depends`, `index_callers`, `index_full`, `index_watch`.
+- Config: `config_get`, `config_set`.
+- Mode: `mode_list`, `mode_info`, `mode_activate`, `mode_current`.
+- Connector management: `connector_list`, `connector_run` (each named connector is, however, exposed dynamically as `unispec_<name>` — see below).
+- Ingest/parse: `code_analysis`, `code_parse` (use `unispec ingest run` / `unispec parse file`).
+- Setup: `unispec init`, `unispec pkg …`, `unispec mode add|remove`, `unispec connector new|delete|edit`, `unispec patty …`.
 
----
+If you need to drive these from an agent, shell out to the CLI.
 
-### Using MCP Tools in Conversation
+## Dynamic connector tools
 
-Once your AI is connected, you can use natural language:
-
-```
-# Topics
-"List all topics in Staging"
-"Create a new topic called 'Payment API' in Working"
-"Show me the details for the User Login topic"
-"Show the User Login topic from the Staging area"
-"Show all files for User Login across all areas"
-"Push 'Payment API' to Build"
-
-# Areas
-"What areas do we have?"
-"Add a new area called 'Review'"
-"What's the health of each area?"
-
-# Index
-"What files are linked to the authentication topic?"
-"Link src/auth/login.rs to the User Login topic"
-"Find all files linked to the payment topic"
-
-# Modes
-"Switch to sprint mode"
-"What modes are available?"
-
-# Connectors
-"Run the test connector"
-"Run lint with extra arguments"
-```
-
-### MCP Tool Parameters
-
-The `topics_show` tool supports additional parameters for multi-area topics:
-
-```json
-{
-  "topics_show": {
-    "topic": "user-auth",
-    "show_all": false,
-    "from": "Staging"
-  }
-}
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `topic` | string | Name of the topic to show (required) |
-| `show_all` | boolean | Show files from all areas (default: false) |
-| `from` | string | Show files from a specific area (e.g., "Staging", "Working") |
-
-The `topics_push` tool supports the `--from` parameter:
-
-```json
-{
-  "topics_push": {
-    "topic": "user-auth",
-    "area": "Working",
-    "source_area": "Staging"
-  }
-}
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `topic` | string | Name of the topic to push (required) |
-| `area` | string | Target area to push to (required) |
-| `source_area` | string | Source area (optional, auto-detected if not provided) |
-
-## Connector MCP Tools
-
-Create connectors that become AI-runnable commands:
-
-```bash
-# Add a test connector
-unispec connector new test "Run test suite" "pytest" "tests/" "-v"
-
-# Add a build connector  
-unispec connector new build "Build project" "cargo" "build"
-
-# Add a lint connector
-unispec connector new lint "Run linter" "ruff" "check" "."
-```
-
-Now your AI can run:
-- "Run the test connector"
-- "Execute build"
-- "Run lint and fix errors"
-
-### Connector Structure
-
-Connectors are defined in `.agent/config.toml`:
+Every connector defined in `.agent/config.toml` becomes an MCP tool named `unispec_<connector_name>`:
 
 ```toml
 [[connector]]
@@ -213,9 +113,7 @@ args = ["tests/", "-v"]
 timeout = 60
 ```
 
-### Connector Dynamic Tools
-
-Each connector automatically becomes an MCP tool named `unispec_<name>`:
+Exposes:
 
 ```json
 {
@@ -227,157 +125,30 @@ Each connector automatically becomes an MCP tool named `unispec_<name>`:
       "args": {
         "type": "array",
         "items": {"type": "string"},
-        "description": "Additional arguments to pass to the command"
+        "description": "Extra arguments appended to the connector command"
       }
     }
   }
 }
 ```
 
-### Running Connectors
+The implementation just shells out to `unispec connector run <name> -- <extra-args>` and returns combined stdout/stderr.
+
+## Starting the MCP server
 
 ```bash
-# Run a connector
-unispec connector run test
-
-# Run with arguments
-unispec connector run test -- -k "test_user"
-
-# List all connectors
-unispec connector list
-
-# Generate MCP config for connectors
-unispec connector mcp
-```
-
-### Per-Project Connectors
-
-Create connectors specific to your project:
-
-```bash
-# Custom build script
-unispec connector new deploy-prod "Deploy to production" "./scripts/deploy.sh" "prod"
-
-# Database migrations
-unispec connector new migrate "Run migrations" "alembic" "upgrade" "head"
-
-# Type checking
-unispec connector new typecheck "Type check project" "mypy" "src/"
-```
-
-These are stored in `./.agent/config.toml` and available to your AI editor.
-
-## Commands Not Available via MCP
-
-Some CLI commands are not exposed as MCP tools because they're used for project setup or configuration rather than runtime operations:
-
-| CLI Command | Reason not in MCP |
-|-------------|-------------------|
-| `unispec init` | One-time project initialization |
-| `unispec mode add` | Mode addition (manual config) |
-| `unispec mode remove` | Mode removal (manual config) |
-| `unispec connector new` | Connector creation (config-based) |
-| `unispec connector delete` | Connector deletion (config-based) |
-| `unispec connector edit` | Connector editing (config-based) |
-| `unispec pkg list/search/install/remove` | Package management (use CLI) |
-| `unispec patty enable/disable/status` | Mascot control (use CLI) |
-| `unispec index full` | Index statistics |
-| `unispec index watch` | Background watcher |
-
-## MCP Server
-
-Start the UniSpec MCP server for direct integration:
-
-```bash
+# Default: current directory as project root
 unispec mcp
+
+# Explicit root
+unispec mcp /path/to/project
 ```
 
-This starts an MCP server that tools like Claude Desktop can connect to.
+It speaks JSON-RPC over stdio. Each line is one complete JSON message.
 
-### Claude Desktop Config
+### Claude Desktop
 
-Add to `~/.config/claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "unispec": {
-      "command": "unispec",
-      "args": ["mcp", "./"]
-    }
-  }
-}
-```
-
-## Workflow Files
-
-When you init with an editor, UniSpec creates workflow files in your project:
-
-### Cursor/Windsurf
-
-Files created in `./.cursor/commands/unispec/`:
-
-```markdown
-# unispec:spec.md
-
-## When to use
-Use this workflow when starting a new feature.
-
-## Steps
-1. Check the spec for existing requirements
-2. Create a new topic if needed
-3. Write clear acceptance criteria
-4. Link relevant files
-```
-
-### Claude Code
-
-Files created in `./.claude/commands/unispec/`:
-
-```markdown
-# unispec-commands
-
-[TOOL_CALL]
-{
-  tool => 'unispec_list_topics',
-  args => {
-    --area Staging
-  }
-}
-[/TOOL_CALL]
-```
-
-### Cline
-
-Files created in `./.clinerules/workflows/unispec/`:
-
-```markdown
-# unispec-spec
-
-Run when user wants to create or review a spec.
-
-1. Check existing specs in ./spec/
-2. Create new topic if needed
-3. Use specs to guide implementation
-```
-
-### Manual IDE MCP Setup
-
-If you want to connect UniSpec MCP directly to your editor:
-
-#### Cursor
-1. Go to Settings → MCP
-2. Add new MCP server:
-   - Command: `unispec`
-   - Args: `mcp`
-   - Cwd: `./`
-
-#### Windsurf
-1. Go to Settings → Extensions → MCP
-2. Add server with same config as Cursor
-
-#### Claude Desktop
-Add to `~/.config/claude/settings.json`:
+`~/.config/claude/settings.json`:
 
 ```json
 {
@@ -385,18 +156,15 @@ Add to `~/.config/claude/settings.json`:
     "unispec": {
       "command": "unispec",
       "args": ["mcp"],
-      "env": {
-        "UNISPEC_ROOT": "./"
-      }
+      "env": { "UNISPEC_ROOT": "/abs/path/to/project" }
     }
   }
 }
 ```
 
-#### VS Code
-Use the MCP extension:
-1. Install "MCP" extension
-2. Add to settings.json:
+### Cursor / Windsurf / Continue / VS Code (MCP)
+
+Use the same shape:
 
 ```json
 {
@@ -404,53 +172,49 @@ Use the MCP extension:
     "unispec": {
       "command": "unispec",
       "args": ["mcp"],
-      "cwd": "./"
+      "cwd": "/abs/path/to/project"
     }
   }
 }
 ```
 
-## Custom MCP Integration
+For `unispec init --cursor` etc., UniSpec drops workflow files into the editor's commands directory. These are prose prompts, not MCP — they instruct the agent on which MCP tools to call.
 
-### For Custom Tools
+## Calling tools
 
-If your tool supports MCP, add UniSpec:
+Once connected, your agent can call tools by name. Example (Claude):
 
-```json
-{
-  "mcpServers": {
-    "unispec": {
-      "command": "path/to/unispec",
-      "args": ["mcp"],
-      "env": {
-        "UNISPEC_ROOT": "/path/to/project"
-      }
-    }
-  }
-}
+```
+"Read the spec for user-login in Working"
+→ unispec_read_spec { "topic": "user-login", "area": "Working" }
+
+"Mark task 2 of payment-api done"
+→ tasks_complete { "topic": "payment-api", "task_index": 1 }   # 0-based
+
+"Link src/auth/login.rs to user-login as an implementation"
+→ index_add { "topic": "user-login", "path": "src/auth/login.rs", "link_type": "implementation" }
 ```
 
-### Environment Variables
+## Argument quirks worth remembering
 
-| Variable | Description |
-|----------|-------------|
-| `UNISPEC_ROOT` | Project root (default: current dir) |
-| `UNISPEC_MODE` | Mode to use |
+- `topics_add` and `spec_add` **strip any frontmatter** you include in `content` / `spec_content` / `task_content` and prepend their own. Just provide the body.
+- `task_write` **fails** if the spec file doesn't already exist for that topic; call `spec_add` first.
+- `task_index` is **0-based** for `tasks_complete` and `tasks_incomplete`.
+- `topics_push` from `Staging` or `Fixing` **requires** the topic to appear in `<area>/queue.md`. Use `queue_check` before `topics_push`.
+- The default `area` for every tool that accepts one is `Staging`.
 
-## Tips
+## Environment variables
 
-1. **Start simple** - Just `unispec init --cursor` to begin
-2. **Link everything** - Use `unispec index add` to connect code to specs
-3. **Run connectors** - Make AI run your tests and builds
-4. **Update specs** - AI works better with accurate specs
+| Variable | Purpose |
+|----------|---------|
+| `UNISPEC_ROOT` | Override project root (default: current dir). |
+| `UNISPEC_MODE` | Override the active mode for this MCP session. |
 
 ---
 
-## See Also
+## See also
 
-- [Commands Reference](commands.md) - CLI command documentation
-- [Configuration Reference](configuration.md) - Config files, environment variables
-- [Modes Documentation](modes.md) - Custom workflow configurations
-- [Getting Started](getting-started.md) - Quick start guide
-
-*See modes.md to create custom modes with their own MCP workflows, or commands.md for CLI reference.*
+- [Commands Reference](commands.md)
+- [Configuration Reference](configuration.md)
+- [Modes](modes.md)
+- [Getting Started](getting-started.md)

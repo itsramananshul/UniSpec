@@ -257,18 +257,30 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
     let source_area_normalized = crate::fs::normalize_area_name(&source_area);
     let target_area_normalized = crate::fs::normalize_area_name(target_area);
 
-    // Check if areas exist
+    // Source must exist — we can't push from nowhere.
     if !crate::fs::area_exists(&source_area_normalized) {
         return Err(anyhow::anyhow!(
             "❌ Source area '{}' not found.",
             source_area
         ));
     }
+
+    // Auto-create the target area if it isn't present. Workaround for setups
+    // where `unispec init` didn't create the full 5-area pipeline (e.g. the
+    // current init still ships Staging/Working/Build only). With this in
+    // place, pushing to Testing or Fixing for the first time creates the
+    // area directory + a minimal area.md on demand.
     if !crate::fs::area_exists(&target_area_normalized) {
-        return Err(anyhow::anyhow!(
-            "❌ Target area '{}' not found.",
-            target_area
-        ));
+        let target_area_dir = crate::fs::spec_dir().join(&target_area_normalized);
+        ensure_dir(&target_area_dir)?;
+        let target_area_md = target_area_dir.join("area.md");
+        if !target_area_md.exists() {
+            let stub = format!(
+                "---\narea: {area}\nshort: {area} area\n---\n\n# {area}\n\n## Purpose\n\nAuto-created by `unispec topic push` because the area didn't exist yet.\n",
+                area = target_area_normalized
+            );
+            fs::write(&target_area_md, stub)?;
+        }
     }
 
     if source_area_normalized.to_lowercase() == target_area_normalized.to_lowercase() {
@@ -382,8 +394,11 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
     let dst_task = crate::agent::mode::get_task_filename_for_area(&target_area_normalized);
     let dst_area_file = crate::agent::mode::get_area_filename_for_area(&target_area_normalized);
 
-    // Copy files - keep source files AND create target area files from templates
-    // Only copy specs and tasks, NOT area.md (area files stay in area root)
+    // Copy every file from the source topic directory into the destination
+    // verbatim. We do not synthesise additional files under legacy filenames
+    // (the previous behaviour wrote a duplicate `specs.md`/`tasks.md` next to
+    // the agent-written `<topic>_spec.md`/`<topic>_task.md`, which produced
+    // two divergent specs in the destination).
     for entry in fs::read_dir(&src)? {
         let entry = entry?;
         let path = entry.path();
@@ -394,54 +409,11 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
             continue;
         }
 
-        // First, copy with original filename (keep source area files)
         let orig_dest = dst.join(&filename);
         if path.is_file() {
             fs::copy(&path, &orig_dest)?;
         } else if path.is_dir() {
             copy_dir_recursive(&path, &orig_dest)?;
-        }
-
-        // Second, if this is a spec or task file, create target version from template
-        let is_spec_file = filename == src_spec
-            || filename == dst_spec
-            || filename.ends_with("_spec.md")
-            || filename.ends_with("_specs.md")
-            || filename == "spec.md"
-            || filename == "specs.md";
-        let is_task_file = filename == src_task
-            || filename == dst_task
-            || filename.ends_with("_tasks.md")
-            || filename == "tasks.md";
-
-        if !is_spec_file && !is_task_file {
-            continue;
-        }
-
-        let target_filename = if is_spec_file {
-            dst_spec.clone()
-        } else {
-            dst_task.clone()
-        };
-
-        // Only create target file if it has a different name
-        if target_filename != filename || is_spec_file {
-            let target_dest = dst.join(&target_filename);
-
-            let mut content: String;
-
-            // Check if pushing to Build and it's a spec file
-            let is_build = target_area_normalized.to_lowercase() == "build";
-
-            if is_build && is_spec_file {
-                // Read source file and add completion metadata
-                content = fs::read_to_string(&path)?;
-                let today = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                content = add_completion_metadata(&content, &today);
-                fs::write(&target_dest, &content)?;
-            } else if path.is_file() {
-                fs::copy(&path, &target_dest)?;
-            }
         }
     }
 
@@ -1142,12 +1114,18 @@ pub fn auto_checkin(topic: &str, area: &str) -> Result<String> {
         ));
     }
 
-    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+    // Use the same `<topic>_spec.md` naming convention that `spec_add` writes.
+    // The legacy `get_spec_filename_for_area` returns the mode template name
+    // ("spec.md" / "specs.md") which doesn't match what's actually on disk.
+    let topic_safe = topic.replace('/', "-").replace(' ', "-");
+    let spec_filename = format!("{}_spec.md", topic_safe);
     let spec_path = src_path.join(&spec_filename);
 
+    // No spec file yet — nothing to check in. Don't fail the push for this.
     if !spec_path.exists() {
-        return Err(anyhow::anyhow!(
-            "❌ Spec file not found for topic '{}'.",
+        return Ok(format!(
+            "ℹ️  No spec file at {} for '{}'; skipping auto-checkin.",
+            spec_path.display(),
             topic
         ));
     }

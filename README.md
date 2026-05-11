@@ -50,34 +50,63 @@ This splits up the development process into 3 concepts:
 ## Quick Start
 
 ```bash
-# Install from source
+# Install
 git clone https://github.com/uwzis/unispec.git
 cd unispec
-cargo install unispec
+cargo install --path .
 
-# Or from Arch Linux AUR
-yay -S unispec
-
-# Initialize
-mkdir project && cd project
+# Initialize a project
+mkdir my-app && cd my-app
 unispec init
 
-# Launch TUI
+# Create a topic in Staging (config's default area)
+unispec topic add user-login \
+  --short "Email/password login with JWT" \
+  --content "Users authenticate with email and password. \
+Server returns a signed JWT with a 30-minute expiry."
+
+# Write the spec and tasks for it
+unispec spec add \
+  --topic user-login \
+  --short "Auth design" \
+  --spec-content "POST /login takes {email, password}. \
+On success, returns 200 with {jwt}." \
+  --task-content "- [ ] Implement POST /login
+- [ ] Add JWT signing helper
+- [ ] Write integration tests"
+
+# Add to the Staging readiness queue (required before pushing out of Staging)
+unispec queue add user-login
+
+# Move through the pipeline
+unispec topic push user-login --area Working  --from Staging
+unispec topic push user-login --area Testing  --from Working
+unispec topic push user-login --area Fixing   --from Testing
+unispec queue add user-login --area Fixing
+unispec topic push user-login --area Build    --from Fixing
+
+# Or launch the interactive TUI any time
 unispec
 ```
+
+See [docs/quickstart.md](docs/quickstart.md) for a five-minute walkthrough and [docs/workflow.md](docs/workflow.md) for the full pipeline rules.
 <img src="IDE.jpg" width="1200" alt="Paddy the Platypus">
 
 ---
 
 ## Core Concepts 🔥
 
-### Areas (Simple Mode)
+### Areas (Default Mode)
 
-| Area | Purpose |
-|------|---------|
-| **Staging** | Writing specs |
-| **Building** | Writing code |
-| **Ship** | Done. Ready to deploy. |
+| Area | Purpose | Readiness queue required to push out? |
+|------|---------|---------------------------------------|
+| **Staging** | Writing specs | **Yes** — `unispec queue add <topic>` first |
+| **Working** | Writing code | No |
+| **Testing** | Running build & test pipelines | No |
+| **Fixing** | Repairing issues from Testing | **Yes** — `unispec queue add <topic> --area Fixing` first |
+| **Build** | Done. Treated as immutable. | n/a — final stage |
+
+All five areas are created automatically by `unispec init` (the default mode is embedded in the binary). The readiness queue lives at `spec/<area>/queue.md` and is what gates push-out from Staging and Fixing.
 
 ### Indexing (The Secret Sauce)
 
@@ -91,10 +120,7 @@ unispec index add --topic "user-login" --path tests/login_test.py
 
 ### Modes
 
-Custom workflows for different teams:
-- `.agent/modes/simple/` - Default (spec → build → ship)
-- `.agent/modes/complex/`- Advanced workflows
-- `.agent/modes/ingest/` - Create specs from code
+Custom workflows for different teams. The default mode ships at `.agent/modes/default/` and uses the five-area pipeline above. Additional modes (sprint, kanban, RFC, docs) can be installed from the community package repository or built by hand — see [docs/modes.md](docs/modes.md).
 
 ---
 
@@ -179,12 +205,21 @@ He believes in you. 🦫
 
 ## What's Next?
 
-- [Getting Started](docs/getting-started.md) - Full walkthrough
-- [Commands Reference](docs/commands.md) - All CLI commands
-- [Creating Modes](docs/modes.md) - Build custom workflows
-- [MCP Integration](docs/mcp.md) - Connect AI agents
-- [Indexing](docs/indexing.md) - Link code to specs
-- [Repository](repo/README.md) - Community modes & packages
+- [Quickstart](docs/quickstart.md) — five-minute install → first push to Build
+- [Getting Started](docs/getting-started.md) — full walkthrough
+- [Workflow](docs/workflow.md) — the five-area pipeline explained
+- [Areas](docs/areas.md) — what each area means and how the queue gate works
+- [TUI Guide](docs/tui.md) — every keybinding and screen
+- [CLI Reference](docs/cli-reference.md) — every subcommand and flag
+- [Commands Reference](docs/commands.md) — legacy long-form CLI docs
+- [Creating Modes](docs/modes.md) — build custom workflows
+- [Connectors](docs/connectors.md) — turn shell commands into MCP tools
+- [MCP Tools Reference](docs/mcp-tools-reference.md) — every MCP tool, with JSON-RPC examples
+- [MCP Integration](docs/mcp-integration.md) — wire Claude Code / Cursor / Windsurf / Cline / Zed
+- [Indexing](docs/indexing.md) — link code to specs
+- [Architecture](docs/architecture.md) — how the codebase is laid out
+- [Troubleshooting](docs/troubleshooting.md) — common errors and fixes
+- [Changelog](CHANGELOG.md) — version history
 
 ---
 

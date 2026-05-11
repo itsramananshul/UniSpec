@@ -1,194 +1,165 @@
-# Skill: UniSpec SPEC Workflow
+# SPEC Workflow
 
-**Act as a UniSpec Specification Architect.** Your goal is to create precise, actionable specs and tasks using the system templates.
-
----
-
-## Purpose
-This workflow is for creating, modifying, and arranging topics, specs, and tasks. Use this when planning new features, refining specifications, or organizing work.
+Use this workflow to create or refine a topic, its spec, and its task list — all in the `Staging` area. No code is written here.
 
 ---
 
-## KEY RULE: Topics First, Always!
+## Preconditions
 
-**Constraint: Before doing ANYTHING else, you MUST research topics first!**
+- You know the rough scope of the feature.
+- You can produce a one-line description (`short`) and a body for the topic, the spec, and the task list.
+
+If you don't have those yet, stop and ask the user. Do not invent requirements.
 
 ---
 
-## CREATE TOPICS → FILL TOPICS → CREATE SPECS → FILL SPECS
+## Tools used
 
-**CRITICAL: ALWAYS use MCP tools to create each item one at a time with full content matching the templates!**
+All literal MCP tool names:
 
-### Step 1: Create Topics Using topics_add MCP Tool
+- `read_asset { topic: "templates", asset_type: "topic" | "spec" | "task" }` — read the template body to mirror.
+- `topics_add { topic, area, short, content }` — creates `spec/<area>/<topic>/topic.md`.
+- `spec_add { topic, area, short, spec_content, task_content }` — creates `<topic>_spec.md` and `<topic>_task.md` in the same directory.
+- `queue_add { topic, area }` — register the topic in `spec/Staging/queue.md` so it can later be pushed.
 
-**Format: Use the topic.md template structure**
+The server prepends frontmatter to every file. Pass body text only — no leading `---` block.
+
+---
+
+## Steps
+
+### 1. Read the templates
 
 ```
-topics_add {topic: "auth", area: "Staging", content: "---
-title: auth
-created: 2026-04-08 10:00:00
-author: Your Name
----
-
-# auth
-
-## Overview
-[What this topic covers - high-level summary in 1-2 sentences]
-
-## Purpose
-[Why this topic exists - what problem it solves, who benefits]
-
-## Specs
-- [spec name]: [What this spec covers]
-
-## Sub-topics
-- [sub-topic name]
-"}
+read_asset { topic: "templates", asset_type: "topic" }
+read_asset { topic: "templates", asset_type: "spec" }
+read_asset { topic: "templates", asset_type: "task" }
 ```
 
-**Constraint: Never create an empty topic. Always provide full content matching the template.**
+These return the canonical structure each file should have. Mirror the section headings exactly; fill the body with real, project-specific content.
 
-### Step 2: Create Specs Using spec_add MCP Tool
-
-**Format: Use the spec.md template exactly. Include all sections:**
+### 2. Create the topic
 
 ```
-spec_add {topic: "auth/login", area: "Staging", content: "---
-title: auth/login
-created: 2026-04-08 10:00:00
-author: Your Name
-status: draft
----
-
-# Design: auth/login
-
-## Overview
-
-> High-level summary: What is this feature in 1-2 sentences?
-
-## Purpose
-
-> Why does this feature exist? What problem does it solve? Who benefits?
-
-## In-Depth Details
-
-> Technical explanation: How does it work? What are the components? What are the key decisions?
-
-## Requirements
-
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| REQ-001 | [Requirement statement] | Must/Should |
-
-## Examples
-
-### Example 1: [Name]
-- **Input**: [What goes in]
-- **Output**: [What comes out]
-- **Flow**:
-  1. [Step 1]
-  2. [Step 2]
-
-## Data Model
-
-### Entities
-
-| Entity | Fields | Description |
-|--------|--------|-------------|
-| [Name] | [field]: [type] | [description] |
-
-### Relationships
-
-```
-[EntityA] ──1:N──> [EntityB]
+topics_add {
+  topic: "<topic-name>",
+  area: "Staging",
+  short: "<one-line description>",
+  content: "<body matching templates/topic.md — Overview, Specs, Sub-topics, Notes>"
+}
 ```
 
-## Out of Scope
+Constraints enforced by the server:
+- `content` must be ≥ 10 characters of real text.
+- `short` is required and non-empty.
+- Do **not** include `---` frontmatter in `content`. The server writes `title`, `short`, `created`, `author`.
 
-- [What this spec does NOT cover]
-- [What belongs in a different spec]
+Nested topics use `/`, e.g. `auth/login`. The directory becomes `spec/Staging/auth/login/` and the parent (`auth`) must already exist as a topic.
 
-## Acceptance Criteria
+### 3. Create the spec and task files
 
-- [ ] [Criterion 1]
-- [ ] [Criterion 2]
-", task_content: "---
-spec: auth/login
-created: 2026-04-08
-status: pending
-date: 2026-04-08
----
-
-# Tasks: auth/login
-
-## Implementation
-
-### Phase 1: Foundation
-- [ ] **1.1** [Foundation task - e.g., Set up project structure]
-
-### Phase 2: Core Features
-- [ ] **2.1** [Core feature task - e.g., Implement login form]
-
-### Phase 3: Integration
-- [ ] **3.1** [Integration task - e.g., Connect to authentication service]
-
-### Phase 4: Polish
-- [ ] **4.1** [Polish task - e.g., Add error handling]
-
-## Notes
-
-<!-- Implementation notes, decisions, and blockers -->
-
-<!--
-Date format: YYYY-MM-DD
-Example:
-**2024-01-15**: Chose approach A over B because X
--->
-"}
+```
+spec_add {
+  topic: "<topic-name>",
+  area: "Staging",
+  short: "<one-line description>",
+  spec_content: "<body matching templates/spec.md — Overview, Purpose, In-Depth Details, Requirements, Examples, Data Model, Out of Scope>",
+  task_content: "<body matching templates/task.md — Implementation phases only, no test tasks>"
+}
 ```
 
-**Constraint: Follow the task.md template EXACTLY. Only create IMPLEMENTATION tasks - NO testing tasks!**
+Both `spec_content` and `task_content` are required and must each be ≥ 10 characters. The server strips any `---` block you include and prepends correct frontmatter.
+
+Filenames produced (slashes and spaces in `topic` are converted to `-`):
+- `<topic>_spec.md`
+- `<topic>_task.md`
+
+### 4. Register in the readiness queue
+
+```
+queue_add { topic: "<topic-name>", area: "Staging" }
+```
+
+This is required for the BUILD workflow to later `topics_push` the topic to Working. (Staging and Fixing are queue-gated by the default mode; Working and Testing are not.)
 
 ---
 
-## CRITICAL: NO TESTING TASKS IN SPEC PHASE!
+## CLI alternatives
 
-**Constraint: NEVER create testing tasks during the SPEC workflow!**
+Every MCP call above has a CLI subcommand that runs the same shared code under `src/commands/`. From a shell, the equivalent four-step sequence is:
 
-Testing tasks are ONLY created in the BUILD phase, right before pushing to Testing.
+```bash
+# Step 2 — create the topic
+unispec topic add user-login \
+  --short "Email/password login with JWT session" \
+  --content "<body matching templates/topic.md>"
 
-- ❌ DO NOT add "write tests", "run tests", "test functionality" tasks
-- ✅ DO add implementation tasks like "implement login form", "connect to API"
+# Step 3 — create the spec + task files
+unispec spec add \
+  --topic user-login \
+  --short "Email/password login with JWT session" \
+  --spec-content "<body matching templates/spec.md>" \
+  --task-content "- [ ] Add User table + migration
+- [ ] Implement POST /login handler
+- [ ] Implement JWT signing helper"
 
-**Remember: Testing comes LATER in the BUILD phase.**
+# Step 4 — register in the Staging queue
+unispec queue add user-login
+```
+
+Notes:
+
+- `--area` defaults to the `area` field in `.agent/config.toml`, falling back to `Staging` if no config exists. Pass it explicitly only when you want to override.
+- `--spec-content` and `--task-content` have `allow_hyphen_values = true`, so a `--task-content` value whose lines start with `- ` (markdown bullets) is accepted as content rather than parsed as flags.
+- The `topic add` `--content` requirement is ≥ 20 chars; `spec add`'s `--spec-content` / `--task-content` are ≥ 11 chars after trim. Below those thresholds the command errors out before writing anything.
 
 ---
 
-## Complete Example Flow
+## Content rules
 
-**Use MCP tools ONE AT A TIME with content matching templates:**
-
-```
-# 1. Research first
-topics_list {area: "Staging"}
-
-# 2. Create topic WITH full content (matching template)
-topics_add {topic: "auth", area: "Staging", content: "..."}
-
-# 3. Create spec WITH full content AND task WITH full content (both matching templates)
-spec_add {topic: "auth/login", area: "Staging", content: "...", task_content: "..."}
-```
+- **Specs describe WHAT, not HOW.** Requirements use SHALL/SHOULD; acceptance criteria are checkable.
+- **Tasks describe implementation steps only.** No "write tests", "QA the feature", or similar. Test tasks are added during BUILD, after implementation.
+- **One topic = one bounded scope.** If you find yourself listing five unrelated capabilities, split into sub-topics (`feature/sub-a`, `feature/sub-b`).
+- **No placeholder text in the final body.** Strings like `[Requirement statement]` or `[Foundation task]` exist in the template to be replaced, not committed.
 
 ---
 
-## Key Rules
+## Definition of done
 
-1. **ALWAYS work in Staging area**
-2. **ALWAYS start with topics**
-3. **Use MCP tools** - topics_add, spec_add with content/task_content params
-4. **Create + Fill = ONE action** - Never separate them
-5. **Follow templates EXACTLY** - Use the spec.md and task.md template structure
-6. **One at a time** - Complete one piece before starting the next
-7. **Use nested topics with `/`**
-8. **NO TESTING TASKS** - Only create IMPLEMENTATION tasks. Testing is handled in the BUILD phase.
-9. **Verify against template** - Always ensure your spec/task matches the template format
+A topic is done with SPEC when **all** of these hold:
+
+- `spec/Staging/<topic>/topic.md` exists and has a real `short` and Overview.
+- `spec/Staging/<topic>/<topic>_spec.md` exists with every template section filled with non-placeholder content.
+- `spec/Staging/<topic>/<topic>_task.md` exists with at least one concrete implementation task and no test tasks.
+- The topic appears in `spec/Staging/queue.md` (verify with `queue_check`).
+- `topics_show { topic, area: "Staging" }` lists `topic.md`, `<topic>_spec.md`, and `<topic>_task.md`.
+
+If any condition fails, the topic is not ready for BUILD.
+
+---
+
+## Example: full sequence
+
+```
+read_asset  { topic: "templates", asset_type: "spec" }
+read_asset  { topic: "templates", asset_type: "task" }
+
+topics_add {
+  topic: "user-login",
+  area: "Staging",
+  short: "Email/password login with JWT session",
+  content: "# user-login\n\n## Overview\nLogin flow for the customer portal — email + password, JWT issued on success.\n\n## Specs\n- `user-login_spec.md`: login flow design and data model.\n\n## Sub-topics\n- (none yet)\n\n## Notes\n- Password reset is out of scope; tracked under `account-recovery`."
+}
+
+spec_add {
+  topic: "user-login",
+  area: "Staging",
+  short: "Email/password login with JWT session",
+  spec_content: "# Design: user-login\n\n## Overview\nUsers submit email + password; server returns a signed JWT.\n\n## Purpose\nAuthenticate returning customers without third-party identity providers.\n\n## In-Depth Details\n- Passwords stored with argon2id.\n- JWT signed with HS256, 30-min expiry, refresh via /token endpoint.\n\n## Requirements\n| ID | Requirement | Priority |\n|----|-------------|----------|\n| REQ-001 | The service SHALL accept POST /login with {email, password}. | Must |\n| REQ-002 | The service SHALL return 401 on bad credentials within 200ms. | Must |\n| REQ-003 | The service SHOULD lock an account after 5 failed attempts in 5 min. | Should |\n\n## Examples\n### Example 1: Successful login\n- Input: {email: \"a@b.com\", password: \"...\"}\n- Output: 200 with {jwt: \"...\"}\n\n## Data Model\n### Entities\n| Entity | Fields | Description |\n|--------|--------|-------------|\n| User | id, email, password_hash, locked_until | One row per customer. |\n\n## Out of Scope\n- Password reset (see account-recovery).\n- SSO.",
+  task_content: "# Tasks: user-login\n\n## Implementation\n\n### Phase 1: Foundation\n- [ ] **1.1** Add User table + migration.\n\n### Phase 2: Core Features\n- [ ] **2.1** Implement POST /login handler.\n- [ ] **2.2** Implement JWT signing helper.\n\n### Phase 3: Integration\n- [ ] **3.1** Wire handler into router with rate-limit middleware.\n\n### Phase 4: Polish\n- [ ] **4.1** Add structured logging on failure.\n\n## Notes\n"
+}
+
+queue_add { topic: "user-login", area: "Staging" }
+```
+
+After this, the BUILD workflow can pick up `user-login` from the queue and push it to Working.

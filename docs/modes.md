@@ -1,6 +1,16 @@
 # Creating Modes
 
-Modes define how you work with UniSpec. The default "Simple Mode" uses Staging → Building → Ship. But you can create custom modes for different workflows.
+Modes define how you work with UniSpec. The shipped default mode (`.agent/modes/default/`) uses the five-area pipeline `Staging → Working → Testing → Fixing → Build`. You can build custom modes for different workflows (kanban, sprint, RFC, docs).
+
+## The default mode is embedded in the binary
+
+`unispec init` no longer relies on a system-wide install or a manually-staged `simple` mode directory. The entire default mode tree (`mode.toml`, `skill.md`, `templates/`, `areas/`, `workflows/`, `system_prompts/`) is bundled into the binary at compile time via the `include_dir` crate. On `init`:
+
+1. If `~/.config/unispec/.agent/modes/default/` exists, it is copied from there (so power users can keep an overridden default globally).
+2. Else if `/usr/share/unispec/.agent/modes/default/` exists, it is copied from there (so distro packagers can install one).
+3. Else the embedded copy is extracted to `.agent/modes/default/` in the project.
+
+The init success line reports which source was used: `UniSpec initialized with default mode (source: embedded)` / `(source: global)` / `(source: system)`. After init, the project always has a fully-populated `default` mode regardless of system state — no manual copy step is required.
 
 ## What is a Mode?
 
@@ -284,27 +294,29 @@ unispec pkg installed
 
 Packages can include modes, connectors, and workflows. See [Commands Reference](commands.md#pkg) for full details.
 
-## Mode Types
+## Common mode shapes
 
-### Simple Mode (Default)
-- Staging → Building → Ship
-- Good for: Solo devs, small teams
+These are typical pipelines; only `default` ships in the repo. The rest are examples you can build yourself or install from the community package repository.
+
+### Default Mode (shipped)
+- Staging → Working → Testing → Fixing → Build
+- Good for: spec-driven solo devs and small teams.
 
 ### Sprint Mode
 - Backlog → In Sprint → Review → Done
-- Good for: Agile teams, two-week cycles
+- Good for: agile teams on fixed cycles.
 
 ### Kanban Mode
 - To Do → In Progress → Code Review → Done
-- Good for: Continuous delivery, Ops teams
+- Good for: continuous-delivery and ops teams.
 
 ### Docs Mode
 - Draft → Review → Published
-- Good for: Documentation projects
+- Good for: documentation projects.
 
 ### RFC Mode
 - Proposed → Discussion → Approved/Rejected
-- Good for: Architecture decisions
+- Good for: architecture decisions.
 
 ## Sharing Modes
 
@@ -329,17 +341,17 @@ tar -xvzf my-mode.tar.gz -C /path/to/project/.agent/modes/
 
 ```toml
 [mode]
-name = "simple"
-display_name = "Simple Mode"
-description = "Default mode with Spec-Driven Development workflows. Staging: specs being written. Working: specs being built. Build: shippable code."
+name = "default"
+display_name = "Standardized Spec-Driven Mode"
+description = "Default UniSpec mode. Staging: writing specs. Working: building code. Testing: build/test runs. Fixing: repair. Build: shippable, immutable."
 version = "1.0.0"
 
 [author]
-name = "OpenSDD Team"
-contact = "https://github.com/osdd"
+name = "UniSpec Team"
+contact = "https://github.com/uwzis/UniSpec"
 
 [requirements]
-min_osdd_version = "0.9.0"
+min_unispec_version = "0.0.1"
 
 [areas]
 default = ["Staging", "Working", "Build"]

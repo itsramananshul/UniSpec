@@ -1,103 +1,115 @@
 ---
-description: Propose a new change - create it and generate all artifacts in one step
+description: Propose a new change — create a topic with spec and tasks in one step
 ---
 
-Propose a new change - create the change and generate all artifacts in one step.
+# /opsx:propose
 
-I'll create a change with artifacts:
-- proposal.md (what & why)
-- design.md (how)
-- tasks.md (implementation steps)
+> **Scope note.** This is an OpenSpec-style "propose a change" prompt mapped onto UniSpec's MCP tools. There is **no** `openspec` CLI in this repository — anywhere this prompt mentions `openspec status`, `openspec instructions`, or `.openspec.yaml`, use the corresponding UniSpec MCP tools listed below instead.
 
-When ready to implement, run /opsx:apply
+In one step, create a topic and a spec + task list in `Staging`. When ready to implement, run `/opsx:apply` (or `/build`).
 
----
+## Input
 
-**Input**: The argument after `/opsx:propose` is the change name (kebab-case), OR a description of what the user wants to build.
+The argument after `/opsx:propose` is either:
+- A kebab-case topic name, e.g. `add-user-auth`.
+- A description of the change ("add user authentication"). Derive a kebab-case name from it (`add-user-auth`).
 
-**Steps**
+If no argument is provided, ask the user:
+> "What change do you want to work on? Describe what you want to build or fix."
 
-1. **If no input provided, ask what they want to build**
+Do not proceed without a clear answer. A vague answer earns one follow-up question.
 
-   Use the **AskUserQuestion tool** (open-ended, no preset options) to ask:
-   > "What change do you want to work on? Describe what you want to build or fix."
+## Tools
 
-   From their description, derive a kebab-case name (e.g., "add user authentication" → `add-user-auth`).
+| Tool | Required args | Purpose |
+|------|---------------|---------|
+| `topics_list` | — | Confirm the chosen name isn't taken. |
+| `read_asset` | `topic: "templates", asset_type: …` | Read templates for the topic/spec/task body. |
+| `topics_add` | `topic, area, short, content` | Create `spec/Staging/<name>/topic.md`. |
+| `spec_add` | `topic, area, short, spec_content, task_content` | Create `<name>_spec.md` + `<name>_task.md`. |
+| `queue_add` | `topic, area` | Add to `spec/Staging/queue.md`. |
 
-   **IMPORTANT**: Do NOT proceed without understanding what the user wants to build.
+## Steps
 
-2. **Create the change directory**
-   ```bash
-   openspec new change "<name>"
-   ```
-   This creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
+### 1. Verify the name is free
+```
+topics_list { area: "Staging" }
+```
+If `<name>` already exists, ask whether to update it (`/spec`) or pick a different name.
 
-3. **Get the artifact build order**
-   ```bash
-   openspec status --change "<name>" --json
-   ```
-   Parse the JSON to get:
-   - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
-   - `artifacts`: list of all artifacts with their status and dependencies
+### 2. Read the templates
+```
+read_asset { topic: "templates", asset_type: "topic" }
+read_asset { topic: "templates", asset_type: "spec" }
+read_asset { topic: "templates", asset_type: "task" }
+```
 
-4. **Create artifacts in sequence until apply-ready**
+### 3. Create the topic
+```
+topics_add {
+  topic: "<name>",
+  area: "Staging",
+  short: "<one-line description>",
+  content: "<topic body mirroring templates/topic.md, real content>"
+}
+```
+`content` must be ≥ 10 chars. Don't include `---`; the server writes frontmatter.
 
-   Use the **TodoWrite tool** to track progress through the artifacts.
+### 4. Create the spec + tasks
+```
+spec_add {
+  topic: "<name>",
+  area: "Staging",
+  short: "<one-line description>",
+  spec_content: "<body mirroring templates/spec.md, every section filled>",
+  task_content: "<body mirroring templates/task.md, implementation tasks only>"
+}
+```
 
-   Loop through artifacts in dependency order (artifacts with no pending dependencies first):
+Both `spec_content` and `task_content` must be ≥ 10 chars. Server strips your `---` and writes its own.
 
-   a. **For each artifact that is `ready` (dependencies satisfied)**:
-      - Get instructions:
-        ```bash
-        openspec instructions <artifact-id> --change "<name>" --json
-        ```
-      - The instructions JSON includes:
-        - `context`: Project background (constraints for you - do NOT include in output)
-        - `rules`: Artifact-specific rules (constraints for you - do NOT include in output)
-        - `template`: The structure to use for your output file
-        - `instruction`: Schema-specific guidance for this artifact type
-        - `outputPath`: Where to write the artifact
-        - `dependencies`: Completed artifacts to read for context
-      - Read any completed dependency files for context
-      - Create the artifact file using `template` as the structure
-      - Apply `context` and `rules` as constraints - but do NOT copy them into the file
-      - Show brief progress: "Created <artifact-id>"
+### 5. Register in the queue
+```
+queue_add { topic: "<name>", area: "Staging" }
+```
 
-   b. **Continue until all `applyRequires` artifacts are complete**
-      - After creating each artifact, re-run `openspec status --change "<name>" --json`
-      - Check if every artifact ID in `applyRequires` has `status: "done"` in the artifacts array
-      - Stop when all `applyRequires` artifacts are done
+### 6. Verify
+```
+topics_show { topic: "<name>", area: "Staging" }
+queue_check { topic: "<name>", area: "Staging" }
+```
 
-   c. **If an artifact requires user input** (unclear context):
-      - Use **AskUserQuestion tool** to clarify
-      - Then continue with creation
+## Content rules
 
-5. **Show final status**
-   ```bash
-   openspec status --change "<name>"
-   ```
+- **Spec = WHAT, not HOW.** Use SHALL/SHOULD; acceptance criteria are checkable.
+- **Tasks = implementation only.** No test tasks here.
+- **No placeholders.** `[Requirement statement]` etc. exist in templates to be replaced.
+- **Nested topics use `/`.** Parent must already exist.
 
-**Output**
+## Definition of done
 
-After completing all artifacts, summarize:
-- Change name and location
-- List of artifacts created with brief descriptions
-- What's ready: "All artifacts created! Ready for implementation."
-- Prompt: "Run `/opsx:apply` to start implementing."
+- `topic.md`, `<name>_spec.md`, `<name>_task.md` all exist in `spec/Staging/<name>/`.
+- The spec contains at least one `REQ-*` row and at least one example.
+- The task file has only implementation tasks.
+- `queue_check` returns `ready: true`.
 
-**Artifact Creation Guidelines**
+## Output
 
-- Follow the `instruction` field from `openspec instructions` for each artifact type
-- The schema defines what each artifact should contain - follow it
-- Read dependency artifacts for context before creating new ones
-- Use `template` as the structure for your output file - fill in its sections
-- **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
-  - Do NOT copy `<context>`, `<rules>`, `<project_context>` blocks into the artifact
-  - These guide what you write, but should never appear in the output
+```
+## Proposal Created: <name>
 
-**Guardrails**
-- Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
-- Always read dependency artifacts before creating a new one
-- If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
-- If a change with that name already exists, ask if user wants to continue it or create a new one
-- Verify each artifact file exists after writing before proceeding to next
+Files:
+- spec/Staging/<name>/topic.md
+- spec/Staging/<name>/<name>_spec.md
+- spec/Staging/<name>/<name>_task.md
+
+Queue: Staging/queue.md updated.
+Next: /opsx:apply <name>  (or /build <name>)
+```
+
+## Guardrails
+
+- Create ALL three files (topic, spec, task) in this single workflow — never partial.
+- If `topics_add` or `spec_add` fails, stop and report the exact error; don't try to repair file state manually with Write tools.
+- If a topic with this name already exists, ask the user whether to continue with `/spec` (update) or pick a new name.
+- Don't fabricate requirements. If you don't know enough, ask the user.

@@ -181,12 +181,12 @@ pub enum Commands {
         /// Project directory to run MCP server for
         path: Option<PathBuf>,
     },
-    /// View the master spec
-    Spec {
-        /// Show master spec (default)
-        #[arg(default_value = "master")]
-        name: Option<String>,
-    },
+    /// Spec commands (show, add)
+    #[command(subcommand)]
+    Spec(SpecCommands),
+    /// Readiness queue commands (add)
+    #[command(subcommand)]
+    Queue(QueueCommands),
     /// Agent mode commands
     #[command(subcommand)]
     Mode(ModeCommands),
@@ -404,14 +404,66 @@ pub enum AreaOrderCommands {
 }
 
 #[derive(Subcommand)]
+pub enum QueueCommands {
+    /// Add a topic to an area's readiness queue (`spec/<area>/queue.md`).
+    /// Required before pushing out of areas listed under `[readiness].areas`
+    /// in `mode.toml` (default: Staging, Fixing).
+    Add {
+        /// Topic name to enqueue
+        topic: String,
+        /// Area whose queue to add to. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
+        /// 0-based position in the queue. Negative or out-of-range = append
+        /// to the end (default).
+        #[arg(short, long, default_value_t = -1)]
+        position: i32,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SpecCommands {
+    /// Show the master spec (`spec/master.md`)
+    Show {
+        /// Spec name (default: master)
+        #[arg(default_value = "master")]
+        name: Option<String>,
+    },
+    /// Create a spec + task file for a topic
+    Add {
+        /// Topic name (use `parent/child` for nested topics)
+        #[arg(short, long)]
+        topic: String,
+        /// Area for the topic. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
+        /// One-line description (required)
+        #[arg(short, long)]
+        short: String,
+        /// Full spec body (matches the spec template). Required, ≥ 11 chars.
+        /// `allow_hyphen_values` lets the value contain lines starting with `- `
+        /// (markdown bullets) without clap treating them as new flags.
+        #[arg(long, allow_hyphen_values = true)]
+        spec_content: String,
+        /// Full task body (matches the task template). Required, ≥ 11 chars.
+        /// `allow_hyphen_values` lets the value contain markdown bullets.
+        #[arg(long, allow_hyphen_values = true)]
+        task_content: String,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum TopicCommands {
     /// Add a new topic
     Add {
         /// Name of the topic to create
         topic: String,
-        /// Area to create the topic in (default: Working)
-        #[arg(short, long, default_value = "Working")]
-        area: String,
+        /// Area to create the topic in. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
         /// Short one-line description (required)
         #[arg(short, long)]
         short: String,
@@ -421,9 +473,10 @@ pub enum TopicCommands {
     },
     /// List topics in an area
     List {
-        /// Area to list topics from (default: Working)
-        #[arg(short = 'a', long, default_value = "Working")]
-        area: String,
+        /// Area to list topics from. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short = 'a', long)]
+        area: Option<String>,
         /// Show hierarchical view
         #[arg(short = 'H', long)]
         hierarchy: bool,
@@ -432,23 +485,32 @@ pub enum TopicCommands {
     Push {
         /// Name of the topic to push
         topic: String,
-        /// Target area to push to
-        area: String,
-        /// Source area to push from
-        #[arg(long)]
+        /// Target area to push to. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
+        /// Source area to push from. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
         from: Option<String>,
     },
     /// Pull a topic from another area
     Pull {
         /// Name of the topic to pull
         topic: String,
-        /// Source area to pull from
-        area: String,
+        /// Source area to pull from. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
     },
     /// Remove a topic
     Remove {
         /// Name of the topic to remove
         topic: String,
+        /// Area the topic lives in. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
         /// Force removal without confirmation
         #[arg(short, long)]
         force: bool,

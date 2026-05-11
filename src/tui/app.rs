@@ -68,6 +68,12 @@ pub struct App {
     pub preview_content: Option<String>,
     pub preview_topic: Option<String>, // Track what's being previewed
     pub selected_short: Option<String>, // Short description of currently selected item
+    /// One-shot signal that the next iteration of the main render loop must
+    /// invalidate ratatui's internal buffer and repaint from scratch. Set after
+    /// the TUI hands the terminal to an external program (e.g. `$EDITOR`) so
+    /// ratatui doesn't diff against its stale pre-suspend buffer and skip
+    /// cells that the editor visibly clobbered.
+    pub needs_full_redraw: bool,
 }
 
 impl App {
@@ -102,6 +108,7 @@ impl App {
             preview_content: None,
             preview_topic: None,
             selected_short: None,
+            needs_full_redraw: false,
         })
     }
 
@@ -287,6 +294,14 @@ impl App {
                         self.animation_step += 1;
                     }
                 }
+            }
+
+            // If we just returned from an external editor / content dump,
+            // invalidate ratatui's internal buffer so the next draw paints
+            // every cell rather than diffing against the pre-suspend state.
+            if self.needs_full_redraw {
+                let _ = terminal.clear();
+                self.needs_full_redraw = false;
             }
 
             terminal.draw(|f: &mut ratatui::Frame| {
@@ -572,7 +587,13 @@ impl App {
                         .map(|a| a.to_lowercase() == "build")
                         .unwrap_or(false);
                     let move_cmd = if is_build { "Pull" } else { "Push" };
-                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | q: Quit", move_cmd))
+                    // In a TopicList view `q` queues the highlighted topic;
+                    // in every other view it quits. Help text follows.
+                    let q_action = match &self.state.nav_state {
+                        NavState::TopicList(_) => "Queue",
+                        _ => "Quit",
+                    };
+                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | q: {}", move_cmd, q_action))
                 };
                 let help_widget = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
                 let (_, _, help_idx) = self.get_chunk_indices();
@@ -962,7 +983,14 @@ impl App {
 
         match key {
             KeyCode::Char('q') | KeyCode::Char('Q') => {
-                self.should_exit = true;
+                // In a TopicList view `q` adds the highlighted topic to the
+                // area's readiness queue. In any other nav state `q` keeps
+                // its long-standing "quit the TUI" meaning.
+                if let NavState::TopicList(_) = &self.state.nav_state {
+                    self.queue_selected_topic();
+                } else {
+                    self.should_exit = true;
+                }
             }
             KeyCode::Down => {
                 let len = match &self.state.nav_state {
@@ -1176,6 +1204,44 @@ impl App {
         }
     }
 
+    /// Add the currently highlighted topic to the current area's readiness
+    /// queue. Wired to `q`/`Q` in `NavState::TopicList`. Surfaces the result
+    /// through the existing `self.message` channel so the help row at the
+    /// bottom briefly shows the outcome.
+    fn queue_selected_topic(&mut self) {
+        let selected = self.list_state.selected().unwrap_or(0);
+        let topic = match self.state.topics.get(selected) {
+            Some(t) => t.topic.clone(),
+            None => {
+                self.message = Some("No topic highlighted to queue.".to_string());
+                self.message_timer = Some(Instant::now());
+                return;
+            }
+        };
+        let area = match self.current_area.as_ref() {
+            Some(a) => a.clone(),
+            None => {
+                self.message = Some("Not inside an area; nothing to queue.".to_string());
+                self.message_timer = Some(Instant::now());
+                return;
+            }
+        };
+        match crate::commands::queue::run_queue_add(&topic, &area, -1) {
+            Ok(out) => {
+                self.message = Some(format!(
+                    "✅ Added '{}' to {}/{}",
+                    out.topic, out.area, out.queue_file
+                ));
+                self.trigger_expression(PlatypusState::Happy, 2);
+            }
+            Err(e) => {
+                self.message = Some(format!("❌ Queue add failed: {}", e));
+                self.trigger_expression(PlatypusState::Sad, 2);
+            }
+        }
+        self.message_timer = Some(Instant::now());
+    }
+
     fn open_file(&mut self, path: &str) {
         let abs_path = std::path::Path::new(path);
         let final_path = if abs_path.is_absolute() {
@@ -1187,11 +1253,87 @@ impl App {
                 .unwrap_or_else(|_| path.to_string())
         };
 
-        if let Err(e) = open::that(&final_path) {
-            self.message = Some(format!("Failed to open: {}", e));
+        // Pick an editor: $EDITOR → nano → vi → fall through to print contents.
+        let editor_cmd: Option<String> = std::env::var("EDITOR")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| binary_on_path("nano").then(|| "nano".to_string()))
+            .or_else(|| binary_on_path("vi").then(|| "vi".to_string()));
+
+        // Suspend the TUI so the editor (or our content dump) has the terminal.
+        let _ = crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+        let _ = crossterm::terminal::disable_raw_mode();
+
+        let outcome: Result<(), String> = if let Some(cmd) = editor_cmd {
+            // $EDITOR may contain flags (e.g. `vim -O`); split on whitespace.
+            let mut parts = cmd.split_whitespace();
+            let bin = parts.next().unwrap_or("");
+            let extra_args: Vec<&str> = parts.collect();
+            match std::process::Command::new(bin)
+                .args(&extra_args)
+                .arg(&final_path)
+                .status()
+            {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("Failed to launch editor '{}': {}", bin, e)),
+            }
+        } else {
+            // No editor on PATH — dump contents and wait for the user to press Enter.
+            match std::fs::read_to_string(&final_path) {
+                Ok(content) => {
+                    println!("--- {} ---", final_path);
+                    print!("{}", content);
+                    if !content.ends_with('\n') {
+                        println!();
+                    }
+                    println!("--- end of file (press Enter to return) ---");
+                    let mut line = String::new();
+                    let _ = std::io::stdin().read_line(&mut line);
+                    Ok(())
+                }
+                Err(e) => Err(format!("Could not read {}: {}", final_path, e)),
+            }
+        };
+
+        // Restore the TUI. Order matches the original setup: raw mode, then
+        // alt screen. Entering the alt screen clears it, but ratatui's
+        // internal buffer still reflects what it drew *before* we suspended,
+        // so a plain `terminal.draw` on the next loop iteration would diff
+        // against that stale buffer and skip repainting cells the editor
+        // visibly clobbered. Two-part fix: (1) issue an explicit terminal
+        // clear + cursor reset via crossterm so the visible screen is blank
+        // immediately, and (2) flag the run loop to call `terminal.clear()`
+        // before the next `draw`, which invalidates ratatui's buffer and
+        // forces a full repaint.
+        let _ = crossterm::terminal::enable_raw_mode();
+        let _ = crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen);
+        let _ = crossterm::execute!(
+            io::stdout(),
+            crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
+            crossterm::cursor::MoveTo(0, 0)
+        );
+        self.needs_full_redraw = true;
+
+        if let Err(msg) = outcome {
+            self.message = Some(msg);
             self.message_timer = Some(Instant::now());
         }
     }
+}
+
+/// Return true if `name` resolves to a file somewhere on the user's `PATH`.
+/// Portable substitute for `which` that needs no new dependency.
+fn binary_on_path(name: &str) -> bool {
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return false;
+    };
+    for dir in std::env::split_paths(&path_var) {
+        if dir.join(name).is_file() {
+            return true;
+        }
+    }
+    false
 }
 
 impl Drop for App {
