@@ -382,8 +382,11 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
     let dst_task = crate::agent::mode::get_task_filename_for_area(&target_area_normalized);
     let dst_area_file = crate::agent::mode::get_area_filename_for_area(&target_area_normalized);
 
-    // Copy files - keep source files AND create target area files from templates
-    // Only copy specs and tasks, NOT area.md (area files stay in area root)
+    // Copy every file from the source topic directory into the destination
+    // verbatim. We do not synthesise additional files under legacy filenames
+    // (the previous behaviour wrote a duplicate `specs.md`/`tasks.md` next to
+    // the agent-written `<topic>_spec.md`/`<topic>_task.md`, which produced
+    // two divergent specs in the destination).
     for entry in fs::read_dir(&src)? {
         let entry = entry?;
         let path = entry.path();
@@ -394,54 +397,11 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
             continue;
         }
 
-        // First, copy with original filename (keep source area files)
         let orig_dest = dst.join(&filename);
         if path.is_file() {
             fs::copy(&path, &orig_dest)?;
         } else if path.is_dir() {
             copy_dir_recursive(&path, &orig_dest)?;
-        }
-
-        // Second, if this is a spec or task file, create target version from template
-        let is_spec_file = filename == src_spec
-            || filename == dst_spec
-            || filename.ends_with("_spec.md")
-            || filename.ends_with("_specs.md")
-            || filename == "spec.md"
-            || filename == "specs.md";
-        let is_task_file = filename == src_task
-            || filename == dst_task
-            || filename.ends_with("_tasks.md")
-            || filename == "tasks.md";
-
-        if !is_spec_file && !is_task_file {
-            continue;
-        }
-
-        let target_filename = if is_spec_file {
-            dst_spec.clone()
-        } else {
-            dst_task.clone()
-        };
-
-        // Only create target file if it has a different name
-        if target_filename != filename || is_spec_file {
-            let target_dest = dst.join(&target_filename);
-
-            let mut content: String;
-
-            // Check if pushing to Build and it's a spec file
-            let is_build = target_area_normalized.to_lowercase() == "build";
-
-            if is_build && is_spec_file {
-                // Read source file and add completion metadata
-                content = fs::read_to_string(&path)?;
-                let today = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                content = add_completion_metadata(&content, &today);
-                fs::write(&target_dest, &content)?;
-            } else if path.is_file() {
-                fs::copy(&path, &target_dest)?;
-            }
         }
     }
 
