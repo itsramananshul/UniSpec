@@ -1,8 +1,14 @@
 // src/commands/init.rs
 use crate::fs::ensure_dir;
 use anyhow::Result;
+use include_dir::{include_dir, Dir};
 use std::fs;
 use std::path::Path;
+
+/// `.agent/modes/default/` is embedded into the binary at compile time so
+/// `unispec init` works on a fresh `cargo install` with no system data files.
+static EMBEDDED_DEFAULT_MODE: Dir<'_> =
+    include_dir!("$CARGO_MANIFEST_DIR/.agent/modes/default");
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     if !dst.exists() {
@@ -23,96 +29,122 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Populate `<dst>` from the embedded default mode if `<dst>` is missing or empty.
+fn extract_embedded_default_mode(dst: &Path) -> Result<()> {
+    ensure_dir(dst)?;
+    EMBEDDED_DEFAULT_MODE.extract(dst)?;
+    Ok(())
+}
+
+/// Source the default mode at `dst` from the first available source:
+/// 1. `~/.config/unispec/.agent/modes/default/`
+/// 2. `/usr/share/unispec/.agent/modes/default/`
+/// 3. The embedded copy compiled into the binary.
+///
+/// No-op if `dst` already contains files.
+fn install_default_mode(dst: &Path) -> Result<&'static str> {
+    let already_populated = dst.exists()
+        && fs::read_dir(dst)
+            .map(|mut it| it.next().is_some())
+            .unwrap_or(false);
+    if already_populated {
+        return Ok("existing");
+    }
+
+    let global = crate::fs::global_modes_dir().join("default");
+    let system = crate::fs::system_modes_dir().join("default");
+
+    if global.exists() {
+        copy_dir_recursive(&global, dst)?;
+        return Ok("global");
+    }
+    if system.exists() {
+        copy_dir_recursive(&system, dst)?;
+        return Ok("system");
+    }
+
+    extract_embedded_default_mode(dst)?;
+    Ok("embedded")
+}
+
 pub fn run_init(root: Option<&std::path::Path>) -> Result<()> {
     let root = root.unwrap_or_else(|| std::path::Path::new("."));
     let spec_root = root.join("spec");
 
-    // Default areas for the default mode pipeline
+    // Default mode pipeline.
     let default_areas = ["Staging", "Working", "Testing", "Fixing", "Build"];
 
-    // Copy area templates from global areas dir (or system install dir as fallback)
-    let areas_dir = crate::fs::global_config_dir().join(".agent").join("areas");
-    let system_areas_dir = crate::fs::system_areas_dir();
+    // Ensure each area directory exists. area.md is filled below from the
+    // installed default mode (preferred) or a generic fallback.
     for area in &default_areas {
-        let area_spec_dir = spec_root.join(area);
-        ensure_dir(&area_spec_dir)?;
-        let area_path = area_spec_dir.join("area.md");
-        if !area_path.exists() {
-            let template_path = areas_dir.join(area.to_lowercase()).join("area.md");
-            let system_template = system_areas_dir.join(area.to_lowercase()).join("area.md");
-            if template_path.exists() {
-                fs::copy(&template_path, &area_path)?;
-            } else if system_template.exists() {
-                fs::copy(&system_template, &area_path)?;
-            }
-        }
+        ensure_dir(&spec_root.join(area))?;
     }
 
-    // Create .agent directory
+    // Create .agent/ + config.toml.
     let agent_root = root.join(".agent");
     ensure_dir(&agent_root)?;
+    ensure_dir(&agent_root.join("modes"))?;
 
     let config_file = agent_root.join("config.toml");
     if !config_file.exists() {
         fs::write(&config_file, CONFIG_TEMPLATE)?;
     }
 
-    // Copy simple mode from global (or system install dir as fallback)
-    let simple_mode = agent_root.join("modes").join("simple");
-    if !simple_mode.exists() {
-        ensure_dir(&simple_mode)?;
-        let global_simple = crate::fs::global_modes_dir().join("simple");
-        let system_simple = crate::fs::system_modes_dir().join("simple");
-        if global_simple.exists() {
-            copy_dir_recursive(&global_simple, &simple_mode)?;
-        } else if system_simple.exists() {
-            copy_dir_recursive(&system_simple, &simple_mode)?;
-        }
-    }
+    // Install the default mode into .agent/modes/default/.
+    let default_mode = agent_root.join("modes").join("default");
+    let source = install_default_mode(&default_mode)?;
 
-    // Copy workflows to main .agent/workflows for active use
-    let workflows_dir = agent_root.join("workflows");
-    ensure_dir(&workflows_dir)?;
-    for workflow_file in ["osdd:spec.md", "osdd:build.md", "osdd:verify.md"] {
-        let src = simple_mode.join("workflows").join(workflow_file);
-        let dst = workflows_dir.join(workflow_file);
-        if src.exists() && !dst.exists() {
-            fs::copy(&src, &dst)?;
-        }
-    }
-
-    // Create default area.md files if they don't exist
-    let default_area_content = r#"# Area: {area}
-
-This is a {area} area for organizing topics.
-
-## Purpose
-
-Add purpose description here.
-
-## Topics
-
-List topics in this area:
-"#;
+    // Populate spec/<Area>/area.md from the mode's per-area templates, falling
+    // back to a generic stub if the template is missing.
     for area in &default_areas {
-        let area_spec_dir = spec_root.join(area);
-        ensure_dir(&area_spec_dir)?;
-        let area_path = area_spec_dir.join("area.md");
-        if !area_path.exists() {
-            let content = default_area_content.replace("{area}", area);
-            fs::write(&area_path, content)?;
+        let area_md = spec_root.join(area).join("area.md");
+        if area_md.exists() {
+            continue;
+        }
+        let template = default_mode
+            .join("areas")
+            .join(area.to_lowercase())
+            .join("area.md");
+        if template.exists() {
+            fs::copy(&template, &area_md)?;
+        } else {
+            let content = DEFAULT_AREA_STUB.replace("{area}", area);
+            fs::write(&area_md, content)?;
         }
     }
 
-    // Copy skill.md to .agent for active use
-    let skill_src = simple_mode.join("skill.md");
+    // Copy every workflow shipped with the mode into .agent/workflows/ for
+    // active use. We glob the directory so future workflow additions land here
+    // automatically.
+    let workflows_dst = agent_root.join("workflows");
+    ensure_dir(&workflows_dst)?;
+    let workflows_src = default_mode.join("workflows");
+    if workflows_src.exists() {
+        for entry in fs::read_dir(&workflows_src)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let dst = workflows_dst.join(entry.file_name());
+            if !dst.exists() {
+                fs::copy(&path, &dst)?;
+            }
+        }
+    }
+
+    // Copy skill.md to .agent/ for active use.
+    let skill_src = default_mode.join("skill.md");
     let skill_dst = agent_root.join("skill.md");
     if skill_src.exists() && !skill_dst.exists() {
         fs::copy(&skill_src, &skill_dst)?;
     }
 
-    // Create modes README
-    fs::write(agent_root.join("modes").join("README.md"), MODES_README)?;
+    // Modes README.
+    let modes_readme = agent_root.join("modes").join("README.md");
+    if !modes_readme.exists() {
+        fs::write(&modes_readme, MODES_README)?;
+    }
 
     println!(
         "
@@ -124,27 +156,42 @@ List topics in this area:
      ╚═════╝ ╚═╝  ╚═══╝╚═╝    ╚══════╝╚═╝     ╚══════╝ ╚═════╝
          "
     );
-    println!("UniSpec initialized with Simple Mode! -- Meet Paddy the Pladdy");
+    println!("UniSpec initialized with default mode (source: {})", source);
+    println!("Areas: Staging → Working → Testing → Fixing → Build");
     println!();
     println!("Agent commands available:");
-    println!("  unispec --help -    Available commands, see docs for more info");
+    println!("  unispec --help        Available commands; see docs/ for more info");
     println!();
-    println!("See .agent/modes/README.md for creating custom modes!");
+    println!("See .agent/modes/README.md for creating custom modes.");
     Ok(())
 }
 
 const CONFIG_TEMPLATE: &str = r#"# UniSpec Agent Configuration
 
-# Current active mode
+# Currently active mode (matches a directory under .agent/modes/).
 current_mode = "default"
 
-# Default area for topic operations
-# default_area = "Working"
+# Default area used by tools that omit `area`.
+area = "Staging"
 
-# Protected areas that cannot be deleted
-# protected_areas = ["Staging", "Working", "Build"]
+# Areas protected from destructive operations.
+protected_areas = ["Build"]
 
-# Connectors - Custom commands that become MCP tools
+# Show the platypus mascot in the TUI.
+paddy_enabled = false
+
+# Ingest configuration - how `unispec ingest run` parses and stores code analysis.
+[ingest]
+auto_index = false
+index_on_complete = false
+capture_functions = true
+capture_structs = true
+capture_enums = true
+capture_imports = true
+output_format = "toml"
+languages = []
+
+# Connectors - shell commands exposed as MCP tools (unispec_<name>).
 # Example:
 # [[connector]]
 # name = "test"
@@ -153,23 +200,52 @@ current_mode = "default"
 # args = ["tests/", "-v"]
 "#;
 
+const DEFAULT_AREA_STUB: &str = r#"---
+area: {area}
+short: {area} area
+---
+
+# {area}
+
+## Purpose
+
+This is the {area} area. Replace this stub with a description of how topics behave here.
+
+## Guidelines
+
+- Document what kinds of work belong in this area.
+- Document what does not.
+"#;
+
 const MODES_README: &str = r#"# UniSpec Modes
 
-Modes define different agent configurations. Each mode has its own workflows and capabilities.
+A mode is a complete workflow configuration: areas, templates, workflows, skill prompt, and any per-area overrides. The default mode ships in `.agent/modes/default/` and uses the five-area pipeline:
 
-## Creating a Mode
+    Staging → Working → Testing → Fixing → Build
+
+## Creating a mode
 
 1. Create directory: `.agent/modes/<mode_name>/`
-2. Add `mode.toml` with metadata
+2. Add `mode.toml` with metadata (see `default/mode.toml` for a working example)
 3. Add `skill.md` with agent persona
 4. Add `workflows/*.md` files
-5. Add `areas/` with staging/, working/, build/ directories containing area.md
+5. Add per-area templates under `areas/<area>/area.md` (use lowercase names)
+6. Optionally add `templates/{topic,spec,task,area}.md` as global fallbacks
 
-## Global Modes
+## Activating a mode
 
-Modes in `~/.config/unispec/modes/` are available to all projects.
+Modes are activated through the CLI (not via MCP):
 
-## Area Templates
+    unispec mode list
+    unispec mode activate <mode-name>
+    unispec mode current
 
-Place area templates in `.agent/areas/<area_name>/area.md`. The init command will copy these to spec/<area_name>/area.md.
+## Search order
+
+Modes are searched in this order; first match wins:
+
+1. Local: `./.agent/modes/`
+2. Global: `~/.config/unispec/.agent/modes/`
+3. System: `/usr/share/unispec/.agent/modes/`
+4. Embedded: the `default` mode compiled into the binary (used by `unispec init` as a final fallback)
 "#;
