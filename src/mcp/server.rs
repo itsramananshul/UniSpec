@@ -1052,128 +1052,39 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
         }
         // === Spec Add (creates <topic>_spec.md and <topic>_task.md from templates) ===
         "spec_add" => {
-            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
-            let area = args
-                .get("area")
+            let topic = args
+                .get("topic")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Staging");
-            let provided_content = args
-                .get("spec_content")
-                .and_then(|v| v.as_str())
-                .map(|s| s.trim())
-                .filter(|s| s.len() > 10)
-                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! spec_add requires meaningful spec_content (at least 10 characters)!\n\nYour 'spec_content' was empty or too short. Include actual spec like:\n\nspec_add {{ topic: \"myproject/auth\", area: \"Staging\", short: \"Description\", spec_content: \"# Design: myproject/auth\\n\\n## Overview\\n> User auth system...\", task_content: \"# Tasks: myproject/auth\\n\\n- [ ] Task 1\" }}"))?;
-            let provided_task_content = args
-                .get("task_content")
-                .and_then(|v| v.as_str())
-                .map(|s| s.trim())
-                .filter(|s| s.len() > 10)
-                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! spec_add requires meaningful task_content (at least 10 characters)!\n\nYour 'task_content' was empty or too short. Include actual tasks like:\n\nspec_add {{ topic: \"myproject/auth\", area: \"Staging\", short: \"Description\", spec_content: \"# Design: myproject/auth\\n\\n## Overview\\n> ...\", task_content: \"# Tasks: myproject/auth\\n\\n- [ ] Task 1\" }}"))?;
-
-            // Check if topic contains "/" (nested path)
-            if topic.contains('/') {
-                // For nested paths like "auth/login", check that parent exists
-                let parts: Vec<&str> = topic.split('/').collect();
-                if parts.len() >= 2 {
-                    let parent_topic = parts[0];
-                    let spec_dir_path = crate::fs::spec_dir().join(area).join(parent_topic);
-                    let spec_dir_path_lower = crate::fs::spec_dir()
-                        .join(area.to_lowercase())
-                        .join(parent_topic);
-
-                    if !spec_dir_path.exists() && !spec_dir_path_lower.exists() {
-                        return Err(anyhow::anyhow!(
-                            "Parent topic '{}' does not exist. Create it first with: topics_add {{topic: \"{}\", area: \"{}\"}}",
-                            parent_topic, parent_topic, area
-                        ));
-                    }
-                }
-            }
-
-            // Create safe filename from topic (replace / with _)
-            let topic_safe = topic.replace("/", "-").replace(" ", "-");
-
-            // Filename is <topic>_spec.md and <topic>_task.md
-            let spec_filename = format!("{}_spec.md", topic_safe);
-            let task_filename = format!("{}_task.md", topic_safe);
-
-            // Find or create the topic directory (supports nested paths like "auth/login")
-            let spec_dir = {
-                let upper = crate::fs::spec_dir().join(area).join(topic);
-                if upper.exists() {
-                    upper
-                } else {
-                    let lower = crate::fs::spec_dir().join(area.to_lowercase()).join(topic);
-                    if lower.exists() {
-                        lower
-                    } else {
-                        std::fs::create_dir_all(&upper)?;
-                        upper
-                    }
-                }
-            };
-
-            // Strip any existing frontmatter from provided content (for spec)
-            let cleaned_content = if provided_content.trim_start().starts_with("---") {
-                if let Some(end) = provided_content.find("\n---") {
-                    &provided_content[end + 5..]
-                } else {
-                    provided_content
-                }
-            } else {
-                provided_content
-            };
-
-            // Strip any existing frontmatter from task_content
-            let cleaned_task_content = if provided_task_content.trim_start().starts_with("---") {
-                if let Some(end) = provided_task_content.find("\n---") {
-                    &provided_task_content[end + 5..]
-                } else {
-                    provided_task_content
-                }
-            } else {
-                provided_task_content
-            };
-
-            // Prepend frontmatter with metadata
-            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-            let author = crate::commands::topic::get_agent_id();
+                .ok_or_else(|| anyhow::anyhow!("spec_add requires 'topic'"))?;
+            let area = args.get("area").and_then(|v| v.as_str());
             let short = args
                 .get("short")
                 .and_then(|v| v.as_str())
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("🚫 FAILED! spec_add requires 'short' parameter!\n\nExample: spec_add {{ topic: \"myproject/auth\", area: \"Staging\", short: \"User authentication\", spec_content: \"...\", task_content: \"...\" }}"))?;
+                .ok_or_else(|| anyhow::anyhow!("spec_add requires 'short'"))?;
+            let spec_content = args
+                .get("spec_content")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("spec_add requires 'spec_content'"))?;
+            let task_content = args
+                .get("task_content")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("spec_add requires 'task_content'"))?;
 
-            let spec_frontmatter = format!(
-                "---\ntitle: {}\nshort: {}\ncreated: {}\nauthor: {}\nstatus: draft\n---\n\n",
-                topic, short, now, author
-            );
-            let task_frontmatter = format!(
-                "---\nspec: {}\nshort: {}\nstatus: pending\ndate: {}\n---\n\n",
+            let out = crate::commands::spec::run_spec_add(
                 topic,
+                area,
                 short,
-                now.split(' ').next().unwrap_or(&now)
-            );
-
-            let spec_full_content = format!("{}{}", spec_frontmatter, cleaned_content.trim_start());
-            let task_full_content =
-                format!("{}{}", task_frontmatter, cleaned_task_content.trim_start());
-
-            // Write files
-            let spec_path = spec_dir.join(&spec_filename);
-            let task_path = spec_dir.join(&task_filename);
-
-            std::fs::write(&spec_path, spec_full_content)?;
-            std::fs::write(&task_path, task_full_content)?;
+                spec_content,
+                task_content,
+            )?;
 
             Ok(json!({
                 "success": true,
                 "message": "Spec and task files created from templates",
-                "topic": topic,
-                "area": area,
-                "spec_file": spec_filename,
-                "task_file": task_filename
+                "topic": out.topic,
+                "area": out.area,
+                "spec_file": out.spec_file,
+                "task_file": out.task_file
             }))
         }
         // === Queue List ===

@@ -181,12 +181,9 @@ pub enum Commands {
         /// Project directory to run MCP server for
         path: Option<PathBuf>,
     },
-    /// View the master spec
-    Spec {
-        /// Show master spec (default)
-        #[arg(default_value = "master")]
-        name: Option<String>,
-    },
+    /// Spec commands (show, add)
+    #[command(subcommand)]
+    Spec(SpecCommands),
     /// Agent mode commands
     #[command(subcommand)]
     Mode(ModeCommands),
@@ -401,6 +398,35 @@ pub enum AreaOrderCommands {
     },
     /// Reset order to default (no custom order)
     Reset,
+}
+
+#[derive(Subcommand)]
+pub enum SpecCommands {
+    /// Show the master spec (`spec/master.md`)
+    Show {
+        /// Spec name (default: master)
+        #[arg(default_value = "master")]
+        name: Option<String>,
+    },
+    /// Create a spec + task file for a topic
+    Add {
+        /// Topic name (use `parent/child` for nested topics)
+        #[arg(short, long)]
+        topic: String,
+        /// Area for the topic. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
+        /// One-line description (required)
+        #[arg(short, long)]
+        short: String,
+        /// Full spec body (matches the spec template). Required, ≥ 11 chars.
+        #[arg(long)]
+        spec_content: String,
+        /// Full task body (matches the task template). Required, ≥ 11 chars.
+        #[arg(long)]
+        task_content: String,
+    },
 }
 
 #[derive(Subcommand)]
