@@ -196,8 +196,13 @@ fn main() -> Result<()> {
             },
         },
         Some(Commands::Topic(topic_cmd)) => match topic_cmd {
-            TopicCommands::Add { topic, area } => {
-                topic::run_new(&topic, &area)?;
+            TopicCommands::Add {
+                topic,
+                area,
+                short,
+                content,
+            } => {
+                topic::run_new(&topic, &area, Some(&short), Some(&content))?;
                 if get_show_platypus() {
                     platypus::happy();
                 }
@@ -550,7 +555,7 @@ fn main() -> Result<()> {
                 spec_file: _,
             } => {
                 let result =
-                    crate::agent::auto::build::run_auto_build(&topic, area.as_deref(), None)?;
+                    crate::agent::auto::build::run_auto_build(topic.as_deref(), area.as_deref(), None)?;
                 println!("Build result: {:?}", result);
             }
             AutoCommands::Verify { topic, area } => {
