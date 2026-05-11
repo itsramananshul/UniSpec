@@ -1102,12 +1102,18 @@ pub fn auto_checkin(topic: &str, area: &str) -> Result<String> {
         ));
     }
 
-    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+    // Use the same `<topic>_spec.md` naming convention that `spec_add` writes.
+    // The legacy `get_spec_filename_for_area` returns the mode template name
+    // ("spec.md" / "specs.md") which doesn't match what's actually on disk.
+    let topic_safe = topic.replace('/', "-").replace(' ', "-");
+    let spec_filename = format!("{}_spec.md", topic_safe);
     let spec_path = src_path.join(&spec_filename);
 
+    // No spec file yet — nothing to check in. Don't fail the push for this.
     if !spec_path.exists() {
-        return Err(anyhow::anyhow!(
-            "❌ Spec file not found for topic '{}'.",
+        return Ok(format!(
+            "ℹ️  No spec file at {} for '{}'; skipping auto-checkin.",
+            spec_path.display(),
             topic
         ));
     }
