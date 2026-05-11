@@ -3,6 +3,39 @@ use anyhow::Result;
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 
+/// Resolve the on-disk path for `<topic>_<suffix>.md`, trying upper-cased then lower-cased area.
+fn resolve_topic_file(area: &str, topic: &str, suffix: &str) -> (std::path::PathBuf, String) {
+    let topic_safe = topic.replace('/', "-").replace(' ', "-");
+    let filename = format!("{}_{}.md", topic_safe, suffix);
+    let upper = crate::fs::spec_dir().join(area).join(topic).join(&filename);
+    let lower = crate::fs::spec_dir()
+        .join(area.to_lowercase())
+        .join(topic)
+        .join(&filename);
+    if upper.exists() {
+        (upper, filename)
+    } else if lower.exists() {
+        (lower, filename)
+    } else {
+        (upper, filename)
+    }
+}
+
+/// Replace the contents of the first `[...]` checkbox marker on `line` with `new_state`.
+fn replace_first_checkbox(line: &str, new_state: &str) -> String {
+    if let Some(open) = line.find('[') {
+        if let Some(close_rel) = line[open + 1..].find(']') {
+            let close = open + 1 + close_rel;
+            let mut out = String::with_capacity(line.len());
+            out.push_str(&line[..open + 1]);
+            out.push_str(new_state);
+            out.push_str(&line[close..]);
+            return out;
+        }
+    }
+    line.to_string()
+}
+
 fn call_tool(name: &str, args: &Value) -> Result<Value> {
     match name {
         "topics_list" => {
@@ -1324,6 +1357,270 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 },
                 "topic": topic,
                 "area": area,
+                "queue_file": queue_file
+            }))
+        }
+        // === Tasks List ===
+        "tasks_list" => {
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("tasks_list requires 'topic'"))?;
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+            let (task_path, task_filename) = resolve_topic_file(area, topic, "task");
+            if !task_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Task file '{}' not found for topic '{}' in area '{}'",
+                    task_filename,
+                    topic,
+                    area
+                ));
+            }
+            let content = std::fs::read_to_string(&task_path)?;
+            let mut tasks = vec![];
+            for (line_no, line) in content.lines().enumerate() {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("- [") {
+                    let status = if trimmed.starts_with("- [x]") || trimmed.starts_with("- [X]") {
+                        "complete"
+                    } else {
+                        "pending"
+                    };
+                    let text = trimmed
+                        .splitn(2, ']')
+                        .nth(1)
+                        .map(|s| s.trim())
+                        .unwrap_or("");
+                    let index = tasks.len();
+                    tasks.push(json!({
+                        "index": index,
+                        "line": line_no,
+                        "status": status,
+                        "text": text
+                    }));
+                }
+            }
+            let count = tasks.len();
+            Ok(json!({
+                "success": true,
+                "topic": topic,
+                "area": area,
+                "tasks": tasks,
+                "count": count
+            }))
+        }
+        // === Tasks Complete / Incomplete ===
+        "tasks_complete" | "tasks_incomplete" => {
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("{} requires 'topic'", name))?;
+            let task_index = args
+                .get("task_index")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("{} requires 'task_index' (integer >= 0)", name))?
+                as usize;
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+            let (task_path, task_filename) = resolve_topic_file(area, topic, "task");
+            if !task_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Task file '{}' not found for topic '{}' in area '{}'",
+                    task_filename,
+                    topic,
+                    area
+                ));
+            }
+            let content = std::fs::read_to_string(&task_path)?;
+            let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+            let mut seen = 0usize;
+            let mut target_line: Option<usize> = None;
+            for (i, line) in lines.iter().enumerate() {
+                if line.trim_start().starts_with("- [") {
+                    if seen == task_index {
+                        target_line = Some(i);
+                        break;
+                    }
+                    seen += 1;
+                }
+            }
+            let line_idx = target_line.ok_or_else(|| {
+                let total = lines
+                    .iter()
+                    .filter(|l| l.trim_start().starts_with("- ["))
+                    .count();
+                anyhow::anyhow!(
+                    "Task index {} out of range (file has {} task(s))",
+                    task_index,
+                    total
+                )
+            })?;
+            let new_state = if name == "tasks_complete" { "x" } else { " " };
+            lines[line_idx] = replace_first_checkbox(&lines[line_idx], new_state);
+            let mut new_content = lines.join("\n");
+            if content.ends_with('\n') {
+                new_content.push('\n');
+            }
+            std::fs::write(&task_path, new_content)?;
+            let status = if name == "tasks_complete" {
+                "complete"
+            } else {
+                "pending"
+            };
+            Ok(json!({
+                "success": true,
+                "topic": topic,
+                "area": area,
+                "task_index": task_index,
+                "status": status
+            }))
+        }
+        // === Notes Read ===
+        "notes_read" => {
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("notes_read requires 'topic'"))?;
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+            let (task_path, task_filename) = resolve_topic_file(area, topic, "task");
+            if !task_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Task file '{}' not found for topic '{}' in area '{}'",
+                    task_filename,
+                    topic,
+                    area
+                ));
+            }
+            let content = std::fs::read_to_string(&task_path)?;
+            let notes = match content.find("## Notes") {
+                Some(idx) => {
+                    let after = &content[idx..];
+                    let mut iter = after.lines();
+                    iter.next();
+                    iter.collect::<Vec<_>>().join("\n").trim().to_string()
+                }
+                None => String::new(),
+            };
+            Ok(json!({
+                "success": true,
+                "topic": topic,
+                "area": area,
+                "notes": notes
+            }))
+        }
+        // === Notes Add ===
+        "notes_add" => {
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("notes_add requires 'topic'"))?;
+            let note = args
+                .get("note")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("notes_add requires non-empty 'note'"))?;
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+            let (task_path, task_filename) = resolve_topic_file(area, topic, "task");
+            if !task_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Task file '{}' not found for topic '{}' in area '{}'",
+                    task_filename,
+                    topic,
+                    area
+                ));
+            }
+            let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+            let note_line = format!("- **{}**: {}", date, note);
+            let mut content = std::fs::read_to_string(&task_path)?;
+            if content.contains("## Notes") {
+                if !content.ends_with('\n') {
+                    content.push('\n');
+                }
+                content.push_str(&note_line);
+                content.push('\n');
+            } else {
+                if !content.ends_with('\n') {
+                    content.push('\n');
+                }
+                content.push_str("\n## Notes\n\n");
+                content.push_str(&note_line);
+                content.push('\n');
+            }
+            std::fs::write(&task_path, content)?;
+            Ok(json!({
+                "success": true,
+                "topic": topic,
+                "area": area,
+                "appended": note_line
+            }))
+        }
+        // === Queue Reorder ===
+        "queue_reorder" => {
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("queue_reorder requires 'topic'"))?;
+            let new_position = args
+                .get("new_position")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("queue_reorder requires 'new_position' (integer)")
+                })?;
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Staging");
+            let queue_file = crate::agent::mode::get_readiness_queue_file();
+            let queue_path = crate::fs::spec_dir().join(area).join(&queue_file);
+            if !queue_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Queue file '{}' not found in area '{}'",
+                    queue_file,
+                    area
+                ));
+            }
+            let content = std::fs::read_to_string(&queue_path)?;
+            let mut items: Vec<String> = content
+                .lines()
+                .filter(|l| l.trim().starts_with("- "))
+                .map(|l| l.trim().trim_start_matches("- ").to_string())
+                .collect();
+            let current = items
+                .iter()
+                .position(|t| t == topic)
+                .ok_or_else(|| anyhow::anyhow!("Topic '{}' is not in the queue", topic))?;
+            let item = items.remove(current);
+            let insert_at = if new_position < 0 {
+                items.len()
+            } else if (new_position as usize) > items.len() {
+                items.len()
+            } else {
+                new_position as usize
+            };
+            items.insert(insert_at, item);
+            let header = "# Task Queue\n\nOrdered list of topics to work on:\n";
+            let mut new_content = String::from(header);
+            for entry in &items {
+                new_content.push_str(&format!("- {}\n", entry));
+            }
+            std::fs::write(&queue_path, new_content)?;
+            Ok(json!({
+                "success": true,
+                "topic": topic,
+                "area": area,
+                "new_position": insert_at,
                 "queue_file": queue_file
             }))
         }
