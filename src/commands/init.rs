@@ -27,8 +27,8 @@ pub fn run_init(root: Option<&std::path::Path>) -> Result<()> {
     let root = root.unwrap_or_else(|| std::path::Path::new("."));
     let spec_root = root.join("spec");
 
-    // Default areas for simple mode
-    let default_areas = ["Staging", "Working", "Build"];
+    // Default areas for the default mode pipeline
+    let default_areas = ["Staging", "Working", "Testing", "Fixing", "Build"];
 
     // Copy area templates from global areas dir (or system install dir as fallback)
     let areas_dir = crate::fs::global_config_dir().join(".agent").join("areas");
