@@ -40,12 +40,18 @@ If any precondition fails, run `/spec` and `queue_add` first.
    topics_list  { area: "Staging" }
    queue_check  { topic: "<topic>", area: "Staging" }
    ```
-   If `ready: false`, `queue_add { topic, area: "Staging" }`, then re-check.
+   If `ready: false`, `queue_add { topic: "<topic>", area: "Staging" }`, then re-check until `ready: true`.
+
+   CLI equivalent: `unispec queue add <topic>` (defaults area from `.agent/config.toml`).
 
 2. **Push to Working.**
    ```
-   topics_push { topic: "<topic>", area: "Working" }
+   topics_push { topic: "<topic>", area: "Working", source_area: "Staging" }
    ```
+
+   CLI equivalent: `unispec topic push <topic> --area Working --from Staging`.
+
+   Push is a real move — the source directory is removed after the copy. If the target area doesn't exist yet, push auto-creates it with a minimal `area.md`.
 
 3. **Load context.**
    ```
@@ -73,8 +79,12 @@ If any precondition fails, run `/spec` and `queue_add` first.
 6. **Promote.**
    ```
    task_status { topic: "<topic>", area: "Working", status: "complete" }
-   topics_push { topic: "<topic>", area: "Testing" }
+   topics_push { topic: "<topic>", area: "Testing", source_area: "Working" }
    ```
+
+   CLI equivalent: `unispec topic push <topic> --area Testing --from Working`.
+
+   Working → Testing is **not** queue-gated by the default mode (only Staging and Fixing are), so no `queue_add` is required for this transition.
 
 ---
 

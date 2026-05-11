@@ -592,7 +592,7 @@ unispec index add --topic <name> --path <path> [OPTIONS]
 | `-t, --topic <name>` | Topic name to link |
 | `-p, --path <path>` | File or directory path to link |
 | `-a, --area <area>` | Area name (auto-detected if not specified) |
-| `-l, --link_type <type>` | Type: 'file' or 'directory' (auto-detected) |
+| `-l, --link-type <type>` | Link type. Auto-detected as `file` or `directory` when omitted; common explicit values include `implementation`, `test`, `doc`, `config`. |
 
 **Example:**
 ```bash
@@ -600,7 +600,7 @@ unispec index add --topic <name> --path <path> [OPTIONS]
 unispec index add --topic "user-login" --path src/auth/login.rs
 
 # Link a directory to a topic
-unispec index add --topic "api-redesign" --path src/api/ --link_type directory
+unispec index add --topic "api-redesign" --path src/api/ --link-type directory
 
 # Specify area explicitly
 unispec index add --topic "feature-x" --path src/feature_x.rs -a Staging

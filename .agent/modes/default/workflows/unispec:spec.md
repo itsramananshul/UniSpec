@@ -62,11 +62,20 @@ Filenames produced: `<topic>_spec.md`, `<topic>_task.md` (slashes/spaces in `top
 queue_add { topic: "<topic-name>", area: "Staging" }
 ```
 
+CLI equivalent:
+
+```bash
+unispec queue add <topic-name>
+```
+
+Staging is one of two queue-gated areas in the default mode (the other is Fixing). The `topics_push` from Staging will be rejected with `❌ Topic '<name>' is not ready to push. It must be listed in spec/Staging/queue.md.` if this step is skipped.
+
 ### 5. Verify
 ```
 topics_show { topic: "<topic-name>", area: "Staging" }
+queue_check { topic: "<topic-name>", area: "Staging" }
 ```
-Expect to see `topic.md`, `<topic>_spec.md`, `<topic>_task.md`.
+`topics_show` should list `topic.md`, `<topic-safe>_spec.md`, `<topic-safe>_task.md`. `queue_check` should return `{ "ready": true }`.
 
 ---
 
@@ -92,5 +101,25 @@ Expect to see `topic.md`, `<topic>_spec.md`, `<topic>_task.md`.
 
 - **`topics_add` errors with "content required"** — `content` was empty or under 10 chars. Write a real body.
 - **`spec_add` errors with "spec_content required"** — you passed `content` instead. Use `spec_content`.
-- **`spec_add` errors with "parent topic does not exist"** — for a nested topic like `auth/login`, run `topics_add { topic: "auth", ... }` first.
+- **`spec_add` errors with "parent topic does not exist"** — for a nested topic like `auth/login`, run `topics_add { topic: "auth", ... }` first. The parent must be a real topic directory before the child can be created inside it.
 - **Conflict on existing topic** — `topics_add` refuses to overwrite. If you genuinely want to redo it, `topics_delete { topic, force: true }` first.
+- **`spec add` CLI errors with `unexpected argument '- ' found`** — you ran an older binary (pre-`everything`) without `allow_hyphen_values = true` on `--task-content`. Rebuild from the `everything` branch.
+
+## CLI form (full workflow in one shell session)
+
+```bash
+unispec topic add <topic-name> \
+  --short "<one-line>" \
+  --content "<body matching templates/topic.md>"
+
+unispec spec add \
+  --topic <topic-name> \
+  --short "<one-line>" \
+  --spec-content "<body matching templates/spec.md>" \
+  --task-content "- [ ] <task 1>
+- [ ] <task 2>"
+
+unispec queue add <topic-name>
+```
+
+`--area` defaults to the `area` field in `.agent/config.toml` (then `Staging` if no config exists), so the explicit `--area Staging` is omitted on a default project.

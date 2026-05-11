@@ -22,11 +22,20 @@ Do **not** create or edit `topic.md`, `<topic>_spec.md`, or `<topic>_task.md` wi
 | Update overall task status | `task_status { topic, area, status }` | `status ∈ {pending, working, complete}`. |
 | Add a note | `notes_add { topic, note, area? }` | |
 | List tasks | `tasks_list { topic, area? }` | |
-| Manage queue | `queue_list`, `queue_add`, `queue_check`, `queue_remove`, `queue_reorder` | |
-| Move topics | `topics_push { topic, area, source_area? }`, `topics_pull { topic, source_area }` | |
+| Manage queue | `queue_list`, `queue_add`, `queue_check`, `queue_remove`, `queue_reorder` | Required before `topics_push` out of Staging or Fixing (the queue-gated areas). |
+| Move topics | `topics_push { topic, area, source_area? }`, `topics_pull { topic, source_area }` | Real move — source dir is removed after copy. |
 | Link code | `index_add { topic, path, area?, link_type?, tags?, annotation? }` | |
 
-Tools that look similar but do **not** exist as MCP tools: `topic_read`, `spec_read`, `task_read`, `index_remove`, `index_cleanup`, `index_tags`, `index_exports`, `index_query`, `index_depends`, `index_callers`. Use the tools in the table above instead.
+Tools that look similar but do **not** exist as MCP tools: `topic_read`, `spec_read`, `task_read`, `index_remove`, `index_cleanup`, `index_tags`, `index_exports`, `index_query`, `index_depends`, `index_callers`. Several of those exist as CLI subcommands (`unispec index remove`, `unispec index cleanup`, `unispec index tags`, `unispec index exports`, `unispec index query`, `unispec index depends`, `unispec index callers`) — shell out to the CLI when you need them.
+
+CLI equivalents for the most common write tools (use these when the editor's MCP transport is unavailable or when scripting):
+
+- `unispec topic add <name> --short "..." --content "..." [--area <area>]`
+- `unispec spec add --topic <name> --short "..." --spec-content "..." --task-content "..." [--area <area>]`
+- `unispec queue add <topic> [--area <area>] [--position <n>]`
+- `unispec topic push <topic> --area <target> --from <source>`
+
+All four are thin wrappers around the same `crate::commands::*` functions the MCP server calls — behaviour is identical between the surfaces.
 
 ---
 

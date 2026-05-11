@@ -60,14 +60,20 @@ There is no MCP tool named `unispec_auto_verify`, `unispec_query_relations`, `un
 
 6. **With `--fix`, if gaps exist:**
    ```
-   topics_push { topic: "<topic>", area: "Fixing" }
+   topics_push { topic: "<topic>", area: "Fixing", source_area: "Testing" }
    task_status { topic: "<topic>", area: "Fixing", status: "working" }
    ```
-   Fix in `src/`, flip checkboxes (`tasks_complete`), record decisions (`notes_add`), then:
+
+   CLI: `unispec topic push <topic> --area Fixing --from Testing`.
+
+   Fix in `src/`, flip checkboxes (`tasks_complete`), record decisions (`notes_add`). Then **enqueue for the push back to Testing** — Fixing is queue-gated, so this `queue_add` is mandatory:
    ```
-   topics_push { topic: "<topic>", area: "Testing" }
+   queue_add   { topic: "<topic>", area: "Fixing" }
+   topics_push { topic: "<topic>", area: "Testing", source_area: "Fixing" }
    task_status { topic: "<topic>", area: "Testing", status: "complete" }
    ```
+
+   CLI: `unispec queue add <topic> --area Fixing && unispec topic push <topic> --area Testing --from Fixing`.
 
 ---
 

@@ -61,13 +61,26 @@ unispec index add --topic user-login --path src/auth/login.rs
 # Link a directory
 unispec index add --topic user-login --path src/auth/
 
+# Explicit link type (clap flag is kebab-case; the field is `link_type` in
+# source and TOML, but the CLI accepts `--link-type`)
+unispec index add --topic user-login --path src/auth/login.rs \
+  --link-type implementation
+
 # With tags
 unispec index add --topic user-login --path src/auth/login.rs --tags auth,backend,security
 
 # With an annotation
 unispec index add --topic user-login --path src/auth/login.rs \
   --annotation "Core login logic — password verification"
+
+# Everything together
+unispec index add --topic user-login --path src/auth/login.rs \
+  --link-type implementation \
+  --tags auth,backend,security \
+  --annotation "Core login logic — password verification"
 ```
+
+Valid `--link-type` values: `implementation` (most common), `test`, `doc`, `config`, `directory`. If omitted, the type is auto-detected as `file` or `directory` based on what `--path` points at.
 
 From MCP:
 ```json

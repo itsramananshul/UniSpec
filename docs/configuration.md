@@ -41,12 +41,24 @@ project/
 │   ├── config.toml
 │   ├── skill.md
 │   ├── modes/
+│   │   ├── README.md
+│   │   └── default/
+│   │       ├── mode.toml
+│   │       ├── skill.md
+│   │       ├── system_prompts/
+│   │       ├── templates/
+│   │       ├── areas/
+│   │       └── workflows/
 │   └── workflows/
 └── spec/
     ├── Staging/
     ├── Working/
+    ├── Testing/
+    ├── Fixing/
     └── Build/
 ```
+
+`unispec init` populates all five pipeline areas (`Staging`, `Working`, `Testing`, `Fixing`, `Build`) and lays down the entire `default` mode tree from an `include_dir`-embedded copy compiled into the binary. No system install is required for init to succeed.
 
 ---
 
@@ -61,8 +73,10 @@ current_mode = "default"
 # Default area for tools that accept an optional `area` argument.
 area = "Staging"
 
-# Areas that refuse area_remove / destructive operations.
-protected_areas = []
+# Areas that refuse area_remove / destructive operations. The default
+# `unispec init` writes `["Build"]` here so the final pipeline stage can't
+# be deleted accidentally.
+protected_areas = ["Build"]
 
 # Show the platypus mascot in the TUI.
 paddy_enabled = false
@@ -95,7 +109,7 @@ timeout = 120
 |-------|------|---------|-------------|
 | `current_mode` | string | `"default"` | Active mode (directory under `.agent/modes/`). |
 | `area` | string | `"Staging"` | Default area used when a tool omits `area`. |
-| `protected_areas` | array<string> | `[]` | Areas protected from deletion. |
+| `protected_areas` | array<string> | `["Build"]` after `unispec init`; `[]` if the field is omitted entirely | Areas protected from `unispec area remove` and other destructive operations. |
 | `paddy_enabled` | bool | `false` | Show the platypus mascot in the TUI. |
 
 ### `[ingest]`
@@ -113,19 +127,33 @@ timeout = 120
 
 ### `[[connector]]`
 
-Each connector becomes an MCP tool named `unispec_<name>` automatically.
+Each connector becomes an MCP tool named `unispec_<name>` automatically. See [connectors.md](connectors.md) for a full guide with worked examples (pytest, `cargo test`, multi-stage Rust toolchains, frontend toolchains).
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Lowercase, underscores only. |
-| `description` | string | Shown in `connector_list` output. |
-| `command` | string | Executable to run. |
-| `args` | array<string> | Default args, prepended before any extra args. |
-| `env` | table | Environment variables. |
-| `working_dir` | string | Working directory. |
-| `timeout` | integer | Timeout in seconds. |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Lowercase, underscores only. Used as the suffix for the dynamic `unispec_<name>` MCP tool. |
+| `description` | string | yes | Shown in `connector_list` output. |
+| `command` | string | yes | Executable to run (resolved against `PATH`). |
+| `args` | array<string> | no | Default args, prepended before any extra args from `connector_run`. |
+| `env` | table | no | Environment variables passed to the child process. |
+| `working_dir` | string | no | Working directory for the child. Defaults to the project root. |
+| `timeout` | integer | no | Timeout in seconds before the child is killed. Default `60`. |
 
-Supported parser languages: `rust`, `javascript`, `typescript`, `python`, `go`, `bash`.
+Minimal example:
+
+```toml
+[[connector]]
+name = "test"
+description = "Run cargo test on the workspace"
+command = "cargo"
+args = ["test", "--all-features"]
+env = { RUST_BACKTRACE = "1" }
+timeout = 600
+```
+
+After saving the file, the MCP server exposes `unispec_test` automatically. Multiple `[[connector]]` blocks can coexist — one for `fmt`, one for `clippy`, one for `test`, etc.
+
+Supported parser languages (for `[ingest]`): `rust`, `javascript`, `typescript`, `python`, `go`, `bash`.
 
 ---
 

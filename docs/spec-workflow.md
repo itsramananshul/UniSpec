@@ -80,7 +80,38 @@ Filenames produced (slashes and spaces in `topic` are converted to `-`):
 queue_add { topic: "<topic-name>", area: "Staging" }
 ```
 
-This is required for the BUILD workflow to later `topics_push` the topic to Working.
+This is required for the BUILD workflow to later `topics_push` the topic to Working. (Staging and Fixing are queue-gated by the default mode; Working and Testing are not.)
+
+---
+
+## CLI alternatives
+
+Every MCP call above has a CLI subcommand that runs the same shared code under `src/commands/`. From a shell, the equivalent four-step sequence is:
+
+```bash
+# Step 2 — create the topic
+unispec topic add user-login \
+  --short "Email/password login with JWT session" \
+  --content "<body matching templates/topic.md>"
+
+# Step 3 — create the spec + task files
+unispec spec add \
+  --topic user-login \
+  --short "Email/password login with JWT session" \
+  --spec-content "<body matching templates/spec.md>" \
+  --task-content "- [ ] Add User table + migration
+- [ ] Implement POST /login handler
+- [ ] Implement JWT signing helper"
+
+# Step 4 — register in the Staging queue
+unispec queue add user-login
+```
+
+Notes:
+
+- `--area` defaults to the `area` field in `.agent/config.toml`, falling back to `Staging` if no config exists. Pass it explicitly only when you want to override.
+- `--spec-content` and `--task-content` have `allow_hyphen_values = true`, so a `--task-content` value whose lines start with `- ` (markdown bullets) is accepted as content rather than parsed as flags.
+- The `topic add` `--content` requirement is ≥ 20 chars; `spec add`'s `--spec-content` / `--task-content` are ≥ 11 chars after trim. Below those thresholds the command errors out before writing anything.
 
 ---
 

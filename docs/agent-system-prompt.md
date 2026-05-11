@@ -90,13 +90,13 @@ For a nested topic like `auth/login`, the directory is `spec/<Area>/auth/login/`
 ## Standard loop
 
 1. `areas_list` and `topics_list {area: "Working"}` to orient.
-2. `queue_list {area: "Working"}` to pick the next topic.
-3. `unispec_read_spec {topic, area: "Working"}` to load full context.
-4. `tasks_list {topic, area: "Working"}` to see what's open.
+2. `topics_progress {area: "Working"}` to see overall task completion across topics in Working.
+3. `unispec_read_spec {topic, area: "Working"}` to load full context for the topic you're starting.
+4. `tasks_list {topic, area: "Working"}` to see what tasks are open.
 5. For each open task: do the work, then `tasks_complete {topic, task_index: N}`.
-6. `index_add {topic, path: "<file you wrote or changed>", link_type: "implementation"}`.
+6. `index_add {topic, path: "<file you wrote or changed>", link_type: "implementation"}` for each new code file.
 7. `notes_add {topic, note: "<decision you made that isn't in the spec>"}` whenever you diverge from the literal spec.
-8. When every task is `[x]` and the topic is in `Working/queue.md`, call `topics_push {topic, area: "Testing"}`.
+8. When every task is `[x]`, call `topics_push {topic, area: "Testing", source_area: "Working"}`. Working → Testing is **not** queue-gated by the default mode, so no `queue_add` is required for this transition. (Pushing **out of** Staging or Fixing **is** gated; call `queue_add` first in those cases.)
 
 ## Definition of done for an agent turn
 

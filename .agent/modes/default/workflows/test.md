@@ -52,17 +52,20 @@ There is no `unispec_auto_test` MCP tool; use the configured connector or shell 
    ```
 
 4. **Route.**
-   - All green:
+   - **All green** — promote to Build. Testing → Build is **not** queue-gated by the default mode, so no `queue_add` is needed.
      ```
      task_status { topic: "<topic>", area: "Testing", status: "complete" }
-     topics_push { topic: "<topic>", area: "Build" }
+     topics_push { topic: "<topic>", area: "Build", source_area: "Testing" }
      ```
-   - Any red:
+     CLI: `unispec topic push <topic> --area Build --from Testing`.
+   - **Any red** — route to Fixing. Testing → Fixing is also not queue-gated.
      ```
-     topics_push { topic: "<topic>", area: "Fixing" }
+     topics_push { topic: "<topic>", area: "Fixing", source_area: "Testing" }
      task_status { topic: "<topic>", area: "Fixing", status: "working" }
      ```
-     Do not attempt to fix code in `/test`. Hand off to `/verify --fix`.
+     CLI: `unispec topic push <topic> --area Fixing --from Testing`.
+
+     Do not attempt to fix code in `/test`. Hand off to `/verify --fix`. (Note: when `/verify --fix` later pushes back to Testing, that push **is** queue-gated — Fixing is in `[readiness].areas` — so it will run `queue_add { topic, area: "Fixing" }` before the push.)
 
 ---
 

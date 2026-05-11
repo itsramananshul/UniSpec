@@ -34,6 +34,16 @@ MCP:
 
 4. **Link every source file** with `index_add` (`link_type: "implementation"`, tag with the language and `ingested`).
 
+   MCP form:
+   ```
+   index_add { topic: "<module>", path: "<file>",
+               link_type: "implementation",
+               tags: "rust,ingested",
+               annotation: "Public surface entry for <module>" }
+   ```
+
+   CLI form: `unispec index add --topic <module> --path <file> --link-type implementation --tags rust,ingested`
+
 5. **Capture cross-module dependencies** via `unispec index callers <symbol>` and record them with `notes_add` on the dependent topic.
 
 6. **Recurse** through sub-directories. Skip directories with no supported source or that are already represented in `topics_list { area: "Ingested" }`.

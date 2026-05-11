@@ -40,7 +40,13 @@ queue_check  { topic: "<topic>", area: "Staging" }
 topics_push { topic: "<topic>", area: "Working" }
 ```
 
-This copies the topic into `spec/Working/<topic>/` and leaves the original in Staging.
+This **moves** the topic into `spec/Working/<topic>/` — the source directory in `Staging` is removed after the copy. If the target area directory doesn't exist yet (e.g. on an older init that only created Staging/Working/Build), it's auto-created with a minimal `area.md` stub.
+
+CLI equivalent:
+
+```bash
+unispec topic push <topic> --area Working --from Staging
+```
 
 ### 3. Load the spec and tasks
 
@@ -96,10 +102,16 @@ task_write {
 
 ```
 task_status  { topic: "<topic>", area: "Working", status: "complete" }
-topics_push  { topic: "<topic>", area: "Testing" }
+topics_push  { topic: "<topic>", area: "Testing", source_area: "Working" }
 ```
 
-The mode config deletes `queue.md` when entering Testing — that's intentional.
+CLI equivalent:
+
+```bash
+unispec topic push <topic> --area Testing --from Working
+```
+
+Working → Testing is **not** queue-gated by the default mode (only Staging and Fixing are), so no `queue_add` is required for this transition.
 
 ---
 
