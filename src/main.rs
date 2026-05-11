@@ -202,6 +202,12 @@ fn main() -> Result<()> {
                 short,
                 content,
             } => {
+                let area = area.unwrap_or_else(|| {
+                    crate::fs::config::load_config()
+                        .ok()
+                        .map(|c| c.area)
+                        .unwrap_or_else(|| "Staging".to_string())
+                });
                 topic::run_new(&topic, &area, Some(&short), Some(&content))?;
                 if get_show_platypus() {
                     platypus::happy();

@@ -409,9 +409,10 @@ pub enum TopicCommands {
     Add {
         /// Name of the topic to create
         topic: String,
-        /// Area to create the topic in (default: Working)
-        #[arg(short, long, default_value = "Working")]
-        area: String,
+        /// Area to create the topic in. Defaults to the `area` field in
+        /// `.agent/config.toml`, or "Staging" if no config exists.
+        #[arg(short, long)]
+        area: Option<String>,
         /// Short one-line description (required)
         #[arg(short, long)]
         short: String,
