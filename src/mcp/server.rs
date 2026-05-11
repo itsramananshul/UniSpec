@@ -140,9 +140,10 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 }
             }
 
+            let topic_safe = topic.replace('/', "-").replace(' ', "-");
             let file_path = match asset_type {
                 "spec" => {
-                    let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
+                    let spec_filename = format!("{}_spec.md", topic_safe);
                     let spec_path_upper = crate::fs::spec_dir()
                         .join(area)
                         .join(topic)
@@ -157,14 +158,15 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                         spec_path_lower
                     } else {
                         return Err(anyhow::anyhow!(
-                            "Spec file not found for topic '{}' in area '{}'",
+                            "Spec file '{}' not found for topic '{}' in area '{}'",
+                            spec_filename,
                             topic,
                             area
                         ));
                     }
                 }
                 "task" => {
-                    let task_filename = crate::agent::mode::get_task_filename_for_area(area);
+                    let task_filename = format!("{}_task.md", topic_safe);
                     let task_path_upper = crate::fs::spec_dir()
                         .join(area)
                         .join(topic)
@@ -179,7 +181,8 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                         task_path_lower
                     } else {
                         return Err(anyhow::anyhow!(
-                            "Task file not found for topic '{}' in area '{}'",
+                            "Task file '{}' not found for topic '{}' in area '{}'",
+                            task_filename,
                             topic,
                             area
                         ));
@@ -565,13 +568,17 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
             Ok(json!({ "success": true, "areas": topics }))
         }
         "unispec_read_spec" => {
-            let topic = args.get("topic").and_then(|v| v.as_str()).unwrap();
+            let topic = args
+                .get("topic")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("unispec_read_spec requires 'topic'"))?;
             let area = args
                 .get("area")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Staging");
-            let spec_filename = crate::agent::mode::get_spec_filename_for_area(area);
-            let task_filename = crate::agent::mode::get_task_filename_for_area(area);
+            let topic_safe = topic.replace('/', "-").replace(' ', "-");
+            let spec_filename = format!("{}_spec.md", topic_safe);
+            let task_filename = format!("{}_task.md", topic_safe);
             let spec_path = crate::fs::spec_dir()
                 .join(area)
                 .join(topic)
@@ -580,8 +587,24 @@ fn call_tool(name: &str, args: &Value) -> Result<Value> {
                 .join(area)
                 .join(topic)
                 .join(&task_filename);
-            let spec = std::fs::read_to_string(spec_path).unwrap_or_default();
-            let tasks = std::fs::read_to_string(task_path).unwrap_or_default();
+            if !spec_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Spec file '{}' not found for topic '{}' in area '{}'",
+                    spec_filename,
+                    topic,
+                    area
+                ));
+            }
+            if !task_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Task file '{}' not found for topic '{}' in area '{}'",
+                    task_filename,
+                    topic,
+                    area
+                ));
+            }
+            let spec = std::fs::read_to_string(&spec_path)?;
+            let tasks = std::fs::read_to_string(&task_path)?;
             Ok(
                 json!({ "success": true, "spec": spec, "tasks": tasks, "spec_file": spec_filename, "task_file": task_filename }),
             )
