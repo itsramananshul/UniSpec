@@ -1187,11 +1187,74 @@ impl App {
                 .unwrap_or_else(|_| path.to_string())
         };
 
-        if let Err(e) = open::that(&final_path) {
-            self.message = Some(format!("Failed to open: {}", e));
+        // Pick an editor: $EDITOR → nano → vi → fall through to print contents.
+        let editor_cmd: Option<String> = std::env::var("EDITOR")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| binary_on_path("nano").then(|| "nano".to_string()))
+            .or_else(|| binary_on_path("vi").then(|| "vi".to_string()));
+
+        // Suspend the TUI so the editor (or our content dump) has the terminal.
+        let _ = crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+        let _ = crossterm::terminal::disable_raw_mode();
+
+        let outcome: Result<(), String> = if let Some(cmd) = editor_cmd {
+            // $EDITOR may contain flags (e.g. `vim -O`); split on whitespace.
+            let mut parts = cmd.split_whitespace();
+            let bin = parts.next().unwrap_or("");
+            let extra_args: Vec<&str> = parts.collect();
+            match std::process::Command::new(bin)
+                .args(&extra_args)
+                .arg(&final_path)
+                .status()
+            {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("Failed to launch editor '{}': {}", bin, e)),
+            }
+        } else {
+            // No editor on PATH — dump contents and wait for the user to press Enter.
+            match std::fs::read_to_string(&final_path) {
+                Ok(content) => {
+                    println!("--- {} ---", final_path);
+                    print!("{}", content);
+                    if !content.ends_with('\n') {
+                        println!();
+                    }
+                    println!("--- end of file (press Enter to return) ---");
+                    let mut line = String::new();
+                    let _ = std::io::stdin().read_line(&mut line);
+                    Ok(())
+                }
+                Err(e) => Err(format!("Could not read {}: {}", final_path, e)),
+            }
+        };
+
+        // Restore the TUI. Order matches the original setup: raw mode, then alt
+        // screen (entering the alt screen clears it, so the main loop's next
+        // `terminal.draw` repaints over a blank surface).
+        let _ = crossterm::terminal::enable_raw_mode();
+        let _ = crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen);
+
+        if let Err(msg) = outcome {
+            self.message = Some(msg);
             self.message_timer = Some(Instant::now());
         }
     }
+}
+
+/// Return true if `name` resolves to a file somewhere on the user's `PATH`.
+/// Portable substitute for `which` that needs no new dependency.
+fn binary_on_path(name: &str) -> bool {
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return false;
+    };
+    for dir in std::env::split_paths(&path_var) {
+        if dir.join(name).is_file() {
+            return true;
+        }
+    }
+    false
 }
 
 impl Drop for App {
