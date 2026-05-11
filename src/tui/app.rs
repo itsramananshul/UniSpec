@@ -587,7 +587,13 @@ impl App {
                         .map(|a| a.to_lowercase() == "build")
                         .unwrap_or(false);
                     let move_cmd = if is_build { "Pull" } else { "Push" };
-                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | q: Quit", move_cmd))
+                    // In a TopicList view `q` queues the highlighted topic;
+                    // in every other view it quits. Help text follows.
+                    let q_action = match &self.state.nav_state {
+                        NavState::TopicList(_) => "Queue",
+                        _ => "Quit",
+                    };
+                    self.message.clone().unwrap_or_else(|| format!(" 🡙 Move | 🡘  Navigate | ↵ Open | n: New | r: Remove | p: {} | f: Find | q: {}", move_cmd, q_action))
                 };
                 let help_widget = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
                 let (_, _, help_idx) = self.get_chunk_indices();
@@ -977,7 +983,14 @@ impl App {
 
         match key {
             KeyCode::Char('q') | KeyCode::Char('Q') => {
-                self.should_exit = true;
+                // In a TopicList view `q` adds the highlighted topic to the
+                // area's readiness queue. In any other nav state `q` keeps
+                // its long-standing "quit the TUI" meaning.
+                if let NavState::TopicList(_) = &self.state.nav_state {
+                    self.queue_selected_topic();
+                } else {
+                    self.should_exit = true;
+                }
             }
             KeyCode::Down => {
                 let len = match &self.state.nav_state {
@@ -1189,6 +1202,44 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// Add the currently highlighted topic to the current area's readiness
+    /// queue. Wired to `q`/`Q` in `NavState::TopicList`. Surfaces the result
+    /// through the existing `self.message` channel so the help row at the
+    /// bottom briefly shows the outcome.
+    fn queue_selected_topic(&mut self) {
+        let selected = self.list_state.selected().unwrap_or(0);
+        let topic = match self.state.topics.get(selected) {
+            Some(t) => t.topic.clone(),
+            None => {
+                self.message = Some("No topic highlighted to queue.".to_string());
+                self.message_timer = Some(Instant::now());
+                return;
+            }
+        };
+        let area = match self.current_area.as_ref() {
+            Some(a) => a.clone(),
+            None => {
+                self.message = Some("Not inside an area; nothing to queue.".to_string());
+                self.message_timer = Some(Instant::now());
+                return;
+            }
+        };
+        match crate::commands::queue::run_queue_add(&topic, &area, -1) {
+            Ok(out) => {
+                self.message = Some(format!(
+                    "✅ Added '{}' to {}/{}",
+                    out.topic, out.area, out.queue_file
+                ));
+                self.trigger_expression(PlatypusState::Happy, 2);
+            }
+            Err(e) => {
+                self.message = Some(format!("❌ Queue add failed: {}", e));
+                self.trigger_expression(PlatypusState::Sad, 2);
+            }
+        }
+        self.message_timer = Some(Instant::now());
     }
 
     fn open_file(&mut self, path: &str) {
