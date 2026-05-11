@@ -257,18 +257,30 @@ pub fn run_push(topic: &str, target_area: &str, source_area: Option<&str>) -> Re
     let source_area_normalized = crate::fs::normalize_area_name(&source_area);
     let target_area_normalized = crate::fs::normalize_area_name(target_area);
 
-    // Check if areas exist
+    // Source must exist — we can't push from nowhere.
     if !crate::fs::area_exists(&source_area_normalized) {
         return Err(anyhow::anyhow!(
             "❌ Source area '{}' not found.",
             source_area
         ));
     }
+
+    // Auto-create the target area if it isn't present. Workaround for setups
+    // where `unispec init` didn't create the full 5-area pipeline (e.g. the
+    // current init still ships Staging/Working/Build only). With this in
+    // place, pushing to Testing or Fixing for the first time creates the
+    // area directory + a minimal area.md on demand.
     if !crate::fs::area_exists(&target_area_normalized) {
-        return Err(anyhow::anyhow!(
-            "❌ Target area '{}' not found.",
-            target_area
-        ));
+        let target_area_dir = crate::fs::spec_dir().join(&target_area_normalized);
+        ensure_dir(&target_area_dir)?;
+        let target_area_md = target_area_dir.join("area.md");
+        if !target_area_md.exists() {
+            let stub = format!(
+                "---\narea: {area}\nshort: {area} area\n---\n\n# {area}\n\n## Purpose\n\nAuto-created by `unispec topic push` because the area didn't exist yet.\n",
+                area = target_area_normalized
+            );
+            fs::write(&target_area_md, stub)?;
+        }
     }
 
     if source_area_normalized.to_lowercase() == target_area_normalized.to_lowercase() {
