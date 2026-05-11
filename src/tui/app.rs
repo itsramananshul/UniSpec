@@ -68,6 +68,12 @@ pub struct App {
     pub preview_content: Option<String>,
     pub preview_topic: Option<String>, // Track what's being previewed
     pub selected_short: Option<String>, // Short description of currently selected item
+    /// One-shot signal that the next iteration of the main render loop must
+    /// invalidate ratatui's internal buffer and repaint from scratch. Set after
+    /// the TUI hands the terminal to an external program (e.g. `$EDITOR`) so
+    /// ratatui doesn't diff against its stale pre-suspend buffer and skip
+    /// cells that the editor visibly clobbered.
+    pub needs_full_redraw: bool,
 }
 
 impl App {
@@ -102,6 +108,7 @@ impl App {
             preview_content: None,
             preview_topic: None,
             selected_short: None,
+            needs_full_redraw: false,
         })
     }
 
@@ -287,6 +294,14 @@ impl App {
                         self.animation_step += 1;
                     }
                 }
+            }
+
+            // If we just returned from an external editor / content dump,
+            // invalidate ratatui's internal buffer so the next draw paints
+            // every cell rather than diffing against the pre-suspend state.
+            if self.needs_full_redraw {
+                let _ = terminal.clear();
+                self.needs_full_redraw = false;
             }
 
             terminal.draw(|f: &mut ratatui::Frame| {
@@ -1230,11 +1245,24 @@ impl App {
             }
         };
 
-        // Restore the TUI. Order matches the original setup: raw mode, then alt
-        // screen (entering the alt screen clears it, so the main loop's next
-        // `terminal.draw` repaints over a blank surface).
+        // Restore the TUI. Order matches the original setup: raw mode, then
+        // alt screen. Entering the alt screen clears it, but ratatui's
+        // internal buffer still reflects what it drew *before* we suspended,
+        // so a plain `terminal.draw` on the next loop iteration would diff
+        // against that stale buffer and skip repainting cells the editor
+        // visibly clobbered. Two-part fix: (1) issue an explicit terminal
+        // clear + cursor reset via crossterm so the visible screen is blank
+        // immediately, and (2) flag the run loop to call `terminal.clear()`
+        // before the next `draw`, which invalidates ratatui's buffer and
+        // forces a full repaint.
         let _ = crossterm::terminal::enable_raw_mode();
         let _ = crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen);
+        let _ = crossterm::execute!(
+            io::stdout(),
+            crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
+            crossterm::cursor::MoveTo(0, 0)
+        );
+        self.needs_full_redraw = true;
 
         if let Err(msg) = outcome {
             self.message = Some(msg);
